@@ -76,7 +76,7 @@ summary(model1)
 A quick look at the coefficients of the first logit model.
 
 ```{r}
-
+coef(model1)
 ```
 
 Now, build an additional logit model that uses the same features, but includes at least one interaction or non-linear term.
