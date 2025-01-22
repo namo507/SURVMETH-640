@@ -45,7 +45,18 @@ Next we split the data into a training (80%) and a test (20%) part. This can be 
 ```{r}
 set.seed(9395)
 # Add code here
+# Calculating the number of rows for training (80%)
+n_train <- round(0.8 * nrow(titanic))
 
+# Creating the indices for random sampling
+train_indices <- sample(seq_len(nrow(titanic)), size = n_train)
+
+# Creating training and test sets
+train_set <- titanic[train_indices, ]
+test_set <- titanic[-train_indices, ]
+
+train_set
+test_set
 ```
 
 ## Logistic regression
