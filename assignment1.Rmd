@@ -128,13 +128,17 @@ In your own words, how would you interpret these ROC curves? What do you think a
 As a next step, we want to predict class membership given the risk scores of our two models. Here we use the default classification threshold, 0.5.
 
 ```{r}
-
+pred_class1 <- ifelse(pred_prob1 > 0.5, 1, 0)
+pred_class2 <- ifelse(pred_prob2 > 0.5, 1, 0)
 ```
 
 On this basis, we can use `confusionMatrix()` to get some performance measures for the predicted classes.
 
 ```{r}
-
+conf_mat1 <- confusionMatrix(factor(pred_class1), test_set$Survived)
+conf_mat2 <- confusionMatrix(factor(pred_class2), test_set$Survived)
+conf_mat1
+conf_mat2
 ```
 
 Briefly explain potential limitations when measuring prediction performance as carried out in the last two code chunks.
