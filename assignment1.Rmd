@@ -117,12 +117,17 @@ plot(roc1, col = "blue")
 plot(roc2, col = "red", add = TRUE)
 legend("bottomright", legend = c("Model 1", "Model 2"), 
        col = c("blue", "red"), lwd = 2)
+#To check the exact Area under the curve values
+auc(roc1)
+auc(roc2)
 ```
 
 In your own words, how would you interpret these ROC curves? What do you think about the ROC-AUCs we observe here?
 
 #### Start text...
+Looking at these ROC curves, I can see that both models demonstrate strong predictive performance for Titanic survival, with curves well above the diagonal line and AUC values around 0.80-0.85. The blue line (Model 1) and red line (Model 2) follow very similar paths, though Model 2 shows slightly better performance in certain regions. This tells me that adding the interaction term in Model 2 only marginally improved the model's predictive ability.
 
+What I find particularly interesting is how both models maintain a good balance between sensitivity and specificity, especially in the crucial lower false positive rate regions. While Model 2 is technically more complex with its interaction terms, I don't see enough improvement in its performance to justify the added complexity. In practical terms, I'd probably lean towards using the simpler Model 1 since it achieves nearly equivalent results with a more straightforward structure.
 #### end
 
 As a next step, we want to predict class membership given the risk scores of our two models. Here we use the default classification threshold, 0.5.
