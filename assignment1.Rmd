@@ -64,7 +64,13 @@ test_set
 In this exercise we simply use logistic regression as our prediction method, since we want to focus on the evaluation part. Build a first logit model with `Survived` as the outcome and `Pclass`, `Sex`, `Age_c`, `Fare` and `Embarked` as features.
 
 ```{r}
+# Fitting logistic regression model
+model1 <- glm(Survived ~ Pclass + Sex + Age_c + Fare + Embarked,
+              data = train_set,
+              family = "binomial")
 
+# View model summary
+summary(model1)
 ```
 
 A quick look at the coefficients of the first logit model.
