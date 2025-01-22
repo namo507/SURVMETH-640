@@ -149,5 +149,7 @@ conf_mat2
 Briefly explain potential limitations when measuring prediction performance as carried out in the last two code chunks.
 
 #### Start text...
+When I look at how we're measuring prediction performance in these code chunks, I notice several important limitations. The most obvious one is our use of a fixed 0.5 threshold for classification, which feels somewhat arbitrary. In real-world scenarios, especially with imbalanced datasets like the Titanic (where fewer people survived than died), this threshold might not be optimal. Additionally, we're relying on a single train/test split, which makes our performance metrics potentially sensitive to how we happened to split the data.
 
+Another concern I have is about the depth of our evaluation. While confusion matrices provide useful metrics like accuracy and sensitivity, they don't tell us about the uncertainty in our predictions or how well calibrated our probability estimates are. The binary classification approach (survived/didn't survive) might also be oversimplifying what could be more nuanced probabilities of survival. Finally, I think it's worth noting that our test set size is relatively small, which means our performance metrics might have high variance and might not reliably generalize to new data.
 #### end
