@@ -82,13 +82,16 @@ coef(model1)
 Now, build an additional logit model that uses the same features, but includes at least one interaction or non-linear term.
 
 ```{r}
-
+# Creating a second model with interaction
+model2 <- glm(Survived ~ Pclass + Sex + Age_c + Fare + Embarked + Sex:Pclass,
+              data = train_set, 
+              family = "binomial")
 ```
 
 Again, summarize the resulting object.
 
 ```{r}
-
+summary(model2)
 ```
 
 ## Prediction in test set
@@ -96,19 +99,24 @@ Again, summarize the resulting object.
 Given both logit objects, we can generate predicted risk scores/ predicted probabilities of `Survived` in the test set.
 
 ```{r}
-
+pred_prob1 <- predict(model1, newdata = test_set, type = "response")
+pred_prob2 <- predict(model2, newdata = test_set, type = "response")
 ```
 
 It is often useful to first get an idea of prediction performance independent of specific classification thresholds. Use the `pROC` (or `PRROC`) package to create roc objects for both risk score vectors.
 
 ```{r}
-
+roc1 <- roc(test_set$Survived, pred_prob1)
+roc2 <- roc(test_set$Survived, pred_prob2)
 ```
 
 Now, you can print and plot the resulting `roc` objects.
 
 ```{r}
-
+plot(roc1, col = "blue")
+plot(roc2, col = "red", add = TRUE)
+legend("bottomright", legend = c("Model 1", "Model 2"), 
+       col = c("blue", "red"), lwd = 2)
 ```
 
 In your own words, how would you interpret these ROC curves? What do you think about the ROC-AUCs we observe here?
