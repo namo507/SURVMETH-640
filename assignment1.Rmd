@@ -1,5 +1,5 @@
 ---
-title: "Assignment 1"
+title: "Assignment 1: Namit Shrivastava"
 output:
   html_document:
     df_print: paged
@@ -72,6 +72,7 @@ model1 <- glm(Survived ~ Pclass + Sex + Age_c + Fare + Embarked,
 # View model summary
 summary(model1)
 ```
+The logistic regression model summary shows that several predictors significantly influence survival on the Titanic. Notably, being in Pclass 2 or 3, being male, and certain age categories (16.3-32.3, 32.3-48.2, 48.2-64.1, and missing age) are associated with lower survival probabilities, as indicated by negative coefficients and low p-values (e.g., Pclass3: Estimate = -2.274, p < 0.001). The intercept and some predictors like Fare and Embarked categories have high p-values, suggesting they are not significant. The model's residual deviance (624.39) and AIC (650.39) indicate its fit, with lower values generally implying a better fit. The number of iterations (15) shows the convergence process of the model fitting.
 
 A quick look at the coefficients of the first logit model.
 
@@ -93,6 +94,7 @@ Again, summarize the resulting object.
 ```{r}
 summary(model2)
 ```
+The second logistic regression model, which includes an interaction term between Sex and Pclass, shows that several predictors significantly affect survival. Notably, being in Pclass 3, being male, and certain age categories (16.3-32.3, 32.3-48.2, 48.2-64.1, and missing age) are associated with lower survival probabilities, as indicated by negative coefficients and low p-values. The interaction term Pclass3:Sexmale is significant (p = 0.013), suggesting that the effect of being in Pclass 3 differs by sex. The model's residual deviance (604.31) and AIC (634.31) indicate a good fit, with the interaction term slightly improving the model's predictive power compared to the first model.
 
 ## Prediction in test set
 
