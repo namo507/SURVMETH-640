@@ -1,0 +1,186 @@
+---
+title: "Assignment 2: Namit Shrivastava"
+format: pdf
+editor: visual
+---
+
+## Setup
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library(glmnet)
+library(caret)
+```
+
+## Data
+
+For this exercise we use the Communities and Crime data from the UCI ML repository, which includes information about communities in the US. "The data combines socio-economic data from the 1990 US Census, law enforcement data from the 1990 US LEMAS survey, and crime data from the 1995 FBI UCR"
+
+Source: https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime
+
+First, some data prep.
+
+```{r}
+crime <- read.csv("~/Downloads/communities.data", header = FALSE, na.strings = "?")
+varnames <- read.delim("~/Downloads/communities.txt", header = FALSE)
+```
+
+Clean name vector and use as variable names.
+
+```{r}
+varnames <- as.character(varnames$V1)
+varnames <- gsub("@attribute ", "", varnames)
+varnames <- gsub(" numeric", "", varnames)
+varnames <- gsub(" string", "", varnames)
+names(crime) <- varnames
+```
+
+To make things easier, drop columns with missing values.
+
+```{r}
+crime <- crime[, colSums(is.na(crime)) == 0]
+```
+
+Check whats left.
+
+```{r}
+str(crime)
+```
+
+## Train and test set
+
+Next, we want to split the data into a training (75%) and a test (25%) part. This can be done by random sampling with `sample`. Note that there is a `fold` variable in the data set, but here we want to follow our own train/test procedure.
+
+```{r}
+set.seed(3940)
+train_idx <- sample(nrow(crime), 0.75*nrow(crime))
+crime_train <- crime[train_idx, ]
+crime_test <- crime[-train_idx, ]
+```
+
+Now, prepare the training data for running regularized regression models via `glmnet`. Our prediction outcome is `ViolentCrimesPerPop`. As X, use all variables except `state`, `communityname`, and `fold`. 
+
+```{r}
+exclude_cols <- c("state", "communityname", "fold", "ViolentCrimesPerPop")
+X <- as.matrix(crime_train[, !names(crime_train) %in% exclude_cols])
+y <- crime_train$ViolentCrimesPerPop
+```
+
+We exclude ViolentCrimesPerPop from X because it shouldn't be used to predict itself and needs to be separate as the y variable so that the model learns relationships between X variables and y
+
+Check whether X looks ok.
+
+```{r}
+dim(X)
+```
+
+### Lasso
+
+Estimate a sequence of Lasso models using `glmnet`. You can stick with the defaults for choosing a range of lambdas.
+
+```{r}
+lasso_fit <- glmnet(X, y, alpha=1)
+```
+
+Here we want to display lambda and the coefficients of the first Lasso model.
+```{r}
+coef(lasso_fit)[,1]
+lasso_fit$lambda[1]
+```
+
+Same for the last Lasso model.
+
+```{r}
+coef(lasso_fit)[,length(lasso_fit$lambda)]
+lasso_fit$lambda[length(lasso_fit$lambda)]
+```
+
+Now, plot the coefficient paths.
+
+```{r}
+plot(lasso_fit, xvar="lambda", label=TRUE)
+```
+
+Next, we need to decide which Lasso model to pick for prediction. Use Cross-Validation for this purpose.
+
+```{r}
+cv_lasso <- cv.glmnet(X, y, alpha=1)
+```
+
+And plot the Cross-validation results.
+
+```{r}
+plot(cv_lasso)
+```
+
+In your own words, briefly describe the CV plot. (1) What is plotted here, (2) what can you infer about the relation between the number of variables and prediction accuracy? 
+
+#### Start text...
+
+Ok so this cross-validation plot shows the Mean-Squared Error (y-axis) against the Log(λ) (x-axis) for a Lasso regression model. The numbers at the top indicate how many variables remain in the model at each lambda value.
+
+Two key observations that can be made from this plot are :
+
+1. The plot displays the prediction error (MSE) with error bars, showing how the model's accuracy changes as the regularization parameter lambda increases. The red dots represent the mean MSE across cross-validation folds, while the gray bars show the standard error.
+
+2. Moving from right to left (as Log(lambda) decreases), more variables enter the model (from 2 to 89 variables). The MSE remains relatively stable until around Log(lambda) = -4, after which it starts increasing sharply. This suggests that having too few variables (high lambda) leads to underfitting and poor prediction accuracy, but the model doesn't necessarily benefit from including all variables either. Hence a moderate number of variables achieves optimal prediction performance.
+
+#### end
+
+Now, store the lambda value of the model with the smallest CV error as `bestlam1`.
+
+```{r}
+bestlam1 <- cv_lasso$lambda.min
+```
+
+Create `bestlam2` as the lambda according to the 1-standard error rule.
+
+```{r}
+bestlam2 <- cv_lasso$lambda.1se
+```
+
+### Prediction in test set
+
+Finally, we investigate the performance of our models in the test set. For this task, construct a X matrix from the test set.
+
+```{r}
+Xt <- as.matrix(crime_test[, !names(crime_test) %in% exclude_cols])
+```
+
+Use the `predict` function to generate predicted values for both models (i.e., both lambdas stored earlier).
+
+```{r}
+pred1 <- predict(lasso_fit, newx=Xt, s=bestlam1)
+pred2 <- predict(lasso_fit, newx=Xt, s=bestlam2)
+```
+
+Compute the test MSE of our models.
+
+```{r}
+mse1 <- mean((crime_test$ViolentCrimesPerPop - pred1)^2)
+mse2 <- mean((crime_test$ViolentCrimesPerPop - pred2)^2)
+```
+
+In addition, use another performance metric and compute the corresponding values for both models.
+
+```{r}
+#One can calculate the R-squared metric
+rsq1 <- cor(crime_test$ViolentCrimesPerPop, pred1)^2
+rsq2 <- cor(crime_test$ViolentCrimesPerPop, pred2)^2
+```
+
+Which model is better? Does it depend on the performance measure that is used?
+
+```{r}
+c(MSE_min = mse1, MSE_1se = mse2)
+c(R2_min = rsq1, R2_1se = rsq2)
+```
+
+#### Start text...
+
+Now based on the results, the model using lambda.min (Model 1) performs slightly better on both metrics since:
+- Lower MSE (0.0186 vs 0.0197)
+- Higher R-squared (0.648 vs 0.627)
+
+However, the differences are small (approx 1-2% in both metrics). Since Model 2 (using lambda.1se) is more parsimonious with fewer variables, it might be preferable in practice despite its slightly worse performance. Hence, the choice between models would depend on whether parameter simplicity or prediction accuracy is more important for the specific application.
+
+#### end
