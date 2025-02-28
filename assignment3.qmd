@@ -232,7 +232,20 @@ Large trees (maxdepth=30) have lower bias as they can model more complex pattern
 
 
 ```{r}
+library(xgboost)
 
+ctrl <- trainControl(
+  method = "cv",           
+  number = 5,              
+  verboseIter = TRUE,      
+  allowParallel = TRUE,    
+  savePredictions = "final", 
+  classProbs = FALSE,      
+  returnResamp = "all"     
+)
+
+# Checking the trainControl object
+str(ctrl)
 ```
 
 **b) Next, set up the tuning parameters by creating a grid of parameters to try.**
