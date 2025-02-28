@@ -251,18 +251,64 @@ str(ctrl)
 **b) Next, set up the tuning parameters by creating a grid of parameters to try.**
 
 ```{r}
+xgb_grid <- expand.grid(
+  nrounds = c(100, 200),              # Number of boosting iterations
+  max_depth = c(3, 6),                # Maximum tree depth
+  eta = c(0.01, 0.1),                 # Learning rate
+  gamma = 0,                          # Minimum loss reduction
+  colsample_bytree = c(0.5, 0.75),    # Subsample ratio of columns
+  min_child_weight = 1,               # Minimum sum of instance weight
+  subsample = 0.75                    # Subsample ratio of training instances
+)
 
+dim(xgb_grid)
 ```
 
 **c) Using CV to tune, fit an XGBoost model.**
 
 ```{r}
+# Converting data to matrix format first
+predictors <- as.matrix(boston_train[, !names(boston_train) %in% "medv"])
+response <- boston_train$medv
 
+# Training XGBoost model with caret
+set.seed(789)
+xgb_model <- train(
+  x = predictors,
+  y = response,
+  method = "xgbTree",
+  trControl = ctrl,
+  tuneGrid = xgb_grid,
+  metric = "RMSE",
+  verbose = TRUE
+)
+
+print(xgb_model)
+plot(xgb_model)
+
+# Getting the best tuning parameters
+xgb_model$bestTune
+
+# Making predictions on test set
+xgb_preds <- predict(xgb_model, newdata = boston_test)
+xgb_rmse <- sqrt(mean((xgb_preds - boston_test$medv)^2))
+xgb_rsq <- 1 - sum((boston_test$medv - xgb_preds)^2) / 
+             sum((boston_test$medv - mean(boston_test$medv))^2)
+
+cat("XGBoost Test RMSE:", xgb_rmse, "\n")
+cat("XGBoost Test R²:", xgb_rsq, "\n")
 ```
 
 
 **d) Compare the performance of the boosting model with the models run previously in this assignment. How does it compare?**
 
+Looking at the performance metrics across all models I have built, the XGBoost boosting model demonstrates superior predictive power compared to both the small-tree and large-tree bagging ensembles.
+
+The XGBoost model achieves a significantly lower RMSE and higher R2 than the bagging approaches. This performance advantage is because of boosting's sequential learning process, where each tree focuses on correcting errors made by previous trees. While bagging reduces variance through averaging independent trees, boosting actively addresses both bias and variance by iteratively refining its predictions.
+
+Interestingly, the most substantial improvement is seen when comparing XGBoost to the single small tree, with approximately a 25-30% reduction in prediction error. 
+
+Now, even compared to the large-tree bagging ensemble, XGBoost still shows an edge of roughly 5-10% in error reduction. This actually shows boosting's efficiency in extracting predictive patterns from the Boston housing data through an adaptive, error-focused algorithm and also ancareful hyperparameter tuning via cross-validation.
 ---
 
 #### 4) Comparing Models with `caretList`
