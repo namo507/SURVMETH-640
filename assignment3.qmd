@@ -99,8 +99,8 @@ last_tree_index <- length(bagged_trees)
 rpart.plot(bagged_trees[[last_tree_index]], 
            main = paste("Tree #", last_tree_index, "in Bagging Ensemble"),
            extra = 1,  # Showing number of observations
-           box.palette = "auto",  # Color by outcome value
-           shadow.col = "gray")  # Adding shadow to boxes
+           box.palette = "auto",
+           shadow.col = "gray")
 
 # Checking the complexity of this tree
 printcp(bagged_trees[[last_tree_index]])
@@ -157,22 +157,72 @@ abline(0, 1, col = "red", lwd = 2)
 **a) In the first loop we've grown small trees. Now, build a new loop and adjust `maxdepth` such that very large trees are grown as individual pieces of the Bagging model.**
 
 ```{r}
+# Setting up parameters for large trees
+n_trees_large <- 100
+tree_control_large <- rpart.control(maxdepth = 30,
+                                   cp = 0.001) 
+# Lower complexity parameter allows more splits
 
+# Creating bagging ensemble with large trees
+set.seed(456)
+bagged_trees_large <- foreach(b = 1:n_trees_large, .combine = list, .multicombine = TRUE) %dopar% {
+  # Bootstrap sample
+  boot_indices
 ```
 
 **b) Confirm that these trees are larger by plotting the last tree.**
 
 ```{r}
+last_tree_index_large <- length(bagged_trees_large)
 
+# Plotting the last tree with rpart.plot
+rpart.plot(bagged_trees_large[[last_tree_index_large]],
+           main = paste("Tree #", last_tree_index_large, "in Large Tree Ensemble"),
+           extra = 0,
+           under = TRUE,
+           compress = TRUE,
+           branch = 0.5)
+
+# Checking complexity of this larger tree
+printcp(bagged_trees_large[[last_tree_index_large]])
 ```
 
 **c) Show how this ensemble model performs.**
 
 ```{r}
+# Generating predictions
+large_ensemble_preds <- predict_bagging_large(bagged_trees_large, newdata = boston_test)
 
+# Calculating error metrics
+large_ensemble_rmse <- sqrt(mean((large_ensemble_preds - boston_test$medv)^2))
+large_ensemble_rsq <- 1 - sum((boston_test$medv - large_ensemble_preds)^2) / 
+                         sum((boston_test$medv - mean(boston_test$medv))^2)
+
+# Comparing with previous ensemble (small trees)
+performance_comparison_all <- data.frame(
+  Model = c("Single Small Tree", "Small Tree Ensemble", "Large Tree Ensemble"),
+  RMSE = c(last_tree_rmse, ensemble_rmse, large_ensemble_rmse),
+  R_squared = c(last_tree_rsq, ensemble_rsq, large_ensemble_rsq)
+)
+
+# Display performance metrics
+print(performance_comparison_all)
+
+# Plot predictions vs actual
+plot(boston_test$medv, large_ensemble_preds,
+     main = "Large Tree Ensemble: Predicted vs Actual",
+     xlab = "Actual Values", ylab = "Predicted Values",
+     pch = 16, col = "purple")
+abline(0, 1, col = "red", lwd = 2)
 ```
 
 **d) In summary, which setting of `maxdepth` did you expect to work better? Why?**
+
+I would expect the large tree ensemble (maxdepth=30) to perform better than the small tree ensemble (maxdepth=3), but thing to remember is that it is with diminishing returns compared to the added complexity.
+
+The reason being that balancing bias and variance in ensemble methods. Meaning in small trees (maxdepth=3), it is more biased because they can't capture complex relationships in the data but have low variance. When combined in a bagging ensemble, they reduce variance somewhat but remain limited by their inherent bias.
+
+Large trees (maxdepth=30) have lower bias as they can model more complex patterns, but higher variance ( which leads to potential overfitting). Bagging specifically addresses the variance problem by averaging multiple trees, making it particularly effective when using larger trees. This allows the ensemble to capture complex relationships while still controlling variance.
 
 ---
 
