@@ -1,0 +1,122 @@
+---
+title: 'Assignment 3: Ensemble Methods'
+output:
+  html_document:
+    df_print: paged
+---
+
+## Setup
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library(mlbench)
+library(foreach)
+library(caret)
+```
+
+## Data
+
+In this notebook, we use the Boston Housing data set (again). "This dataset contains information collected by the U.S Census Service concerning housing in the area of Boston Mass. It was obtained from the StatLib archive (http://lib.stat.cmu.edu/datasets/boston), and has been used extensively throughout the literature to benchmark algorithms."
+
+Source: https://www.cs.toronto.edu/~delve/data/boston/bostonDetail.html
+
+```{r}
+data(BostonHousing2)
+names(BostonHousing2)
+```
+
+First, we drop some variables that we will not use in the next sections.
+
+```{r}
+BostonHousing2$town <- NULL
+BostonHousing2$tract <- NULL
+BostonHousing2$cmedv <- NULL
+```
+
+Next, we start by splitting the data into a train and test set.
+
+```{r}
+set.seed(1293)
+train <- sample(1:nrow(BostonHousing2), 0.8*nrow(BostonHousing2))
+boston_train <- BostonHousing2[train,]
+boston_test <- BostonHousing2[-train,]
+```
+
+---
+
+#### 1) Bagging with Trees
+
+**a) Build a Bagging model using a `foreach` loop. Use the `maxdepth` control option to grow very small trees. These don't have to be stumps, but should not be much larger than a few splits.**
+
+```{r}
+
+```
+
+**b) Plot the last tree of the ensemble to check tree size.**
+
+```{r}
+
+```
+
+**c) Compare the performance of the last tree in the bagging process with the ensemble. That is, look at the performance of the last tree in the loop and compare it with the performance in the overall averaged bagging model.**
+
+```{r}
+
+```
+
+---
+
+#### 2) Bagging with Bigger Trees
+
+**a) In the first loop we've grown small trees. Now, build a new loop and adjust `maxdepth` such that very large trees are grown as individual pieces of the Bagging model.**
+
+```{r}
+
+```
+
+**b) Confirm that these trees are larger by plotting the last tree.**
+
+```{r}
+
+```
+
+**c) Show how this ensemble model performs.**
+
+```{r}
+
+```
+
+**d) In summary, which setting of `maxdepth` did you expect to work better? Why?**
+
+---
+
+#### 3) Building a Boosting Model with XGBoost
+
+**a) Now let's try using a boosting model using trees as the base learner. Here, we will use the XGBoost model. First, set up the `trainControl` parameters.**
+
+
+```{r}
+
+```
+
+**b) Next, set up the tuning parameters by creating a grid of parameters to try.**
+
+```{r}
+
+```
+
+**c) Using CV to tune, fit an XGBoost model.**
+
+```{r}
+
+```
+
+
+**d) Compare the performance of the boosting model with the models run previously in this assignment. How does it compare?**
+
+---
+
+#### 4) Comparing Models with `caretList`
+
+**a) Use `caretList` to run a Bagging model, a Random Forest model, and an XGBoost model using the same CV splits with 5-fold CV. Plot the performance by RMSE. How do the models compare?**
+
+*Hint: You can use `treebag`, `ranger`, and `xgbTree` for the models.*
