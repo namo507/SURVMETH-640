@@ -167,7 +167,26 @@ tree_control_large <- rpart.control(maxdepth = 30,
 set.seed(456)
 bagged_trees_large <- foreach(b = 1:n_trees_large, .combine = list, .multicombine = TRUE) %dopar% {
   # Bootstrap sample
-  boot_indices
+  boot_indices <- sample(nrow(boston_train), replace = TRUE)
+  boot_data <- boston_train[boot_indices, ]
+  
+  # Training tree on bootstrap sample with larger maxdepth
+  tree_model <- rpart(medv ~ ., data = boot_data, control = tree_control_large)
+  
+  tree_model
+}
+
+# Create prediction function for the large tree ensemble
+predict_bagging_large <- function(model_list, newdata) {
+  # Get predictions from each tree
+  preds <- lapply(model_list, predict, newdata = newdata)
+  
+  # Convert to matrix
+  pred_matrix <- do.call(cbind, preds)
+  
+  # Average predictions
+  rowMeans(pred_matrix)
+}
 ```
 
 **b) Confirm that these trees are larger by plotting the last tree.**
