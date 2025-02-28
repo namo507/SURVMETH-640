@@ -48,13 +48,62 @@ boston_test <- BostonHousing2[-train,]
 **a) Build a Bagging model using a `foreach` loop. Use the `maxdepth` control option to grow very small trees. These don't have to be stumps, but should not be much larger than a few splits.**
 
 ```{r}
+# Loading the required library for tree models
+library(rpart)
+library(doParallel)
+library(rpart.plot)
 
+# Setting up parallel processing
+registerDoParallel(cores = 4)
+
+# Setting number of trees for bagging
+n_trees <- 100
+
+# Setting control parameters for small trees
+tree_control <- rpart.control(maxdepth = 3, cp = 0.01)
+
+# Creating bagging ensemble using foreach
+set.seed(123)
+bagged_trees <- foreach(b = 1:n_trees, .combine = list, .multicombine = TRUE) %dopar% {
+  # Bootstrap sample
+  boot_indices <- sample(nrow(boston_train), replace = TRUE)
+  boot_data <- boston_train[boot_indices, ]
+  
+  # Training tree on bootstrap sample
+  tree_model <- rpart(medv ~ ., data = boot_data, control = tree_control)
+  
+  tree_model
+}
+
+# Creating a prediction function for the ensemble
+predict_bagging <- function(model_list, newdata) {
+  # Getting predictions from each tree
+  preds <- lapply(model_list, predict, newdata = newdata)
+  
+  # Converting to matrix
+  pred_matrix <- do.call(cbind, preds)
+  
+  # Average predictions
+  rowMeans(pred_matrix)
+}
+
+# Checking structure of the model
+length(bagged_trees)
 ```
 
 **b) Plot the last tree of the ensemble to check tree size.**
 
 ```{r}
+# Plotting the last tree in the bagging ensemble
+last_tree_index <- length(bagged_trees)
+rpart.plot(bagged_trees[[last_tree_index]], 
+           main = paste("Tree #", last_tree_index, "in Bagging Ensemble"),
+           extra = 1,  # Showing number of observations
+           box.palette = "auto",  # Color by outcome value
+           shadow.col = "gray")  # Adding shadow to boxes
 
+# Checking the complexity of this tree
+printcp(bagged_trees[[last_tree_index]])
 ```
 
 **c) Compare the performance of the last tree in the bagging process with the ensemble. That is, look at the performance of the last tree in the loop and compare it with the performance in the overall averaged bagging model.**
