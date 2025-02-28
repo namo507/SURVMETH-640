@@ -109,7 +109,45 @@ printcp(bagged_trees[[last_tree_index]])
 **c) Compare the performance of the last tree in the bagging process with the ensemble. That is, look at the performance of the last tree in the loop and compare it with the performance in the overall averaged bagging model.**
 
 ```{r}
+# Predictions from the last tree
+last_tree_preds <- predict(bagged_trees[[last_tree_index]], newdata = boston_test)
 
+# Predictions from the full bagging ensemble
+ensemble_preds <- predict_bagging(bagged_trees, newdata = boston_test)
+
+# Calculating RMSE for both models
+last_tree_rmse <- sqrt(mean((last_tree_preds - boston_test$medv)^2))
+ensemble_rmse <- sqrt(mean((ensemble_preds - boston_test$medv)^2))
+
+# Calculating R-squared for both models
+last_tree_rsq <- 1 - sum((boston_test$medv - last_tree_preds)^2) / 
+                    sum((boston_test$medv - mean(boston_test$medv))^2)
+ensemble_rsq <- 1 - sum((boston_test$medv - ensemble_preds)^2) / 
+                   sum((boston_test$medv - mean(boston_test$medv))^2)
+
+# Creating a comparison table
+performance_comparison <- data.frame(
+  Model = c("Single Last Tree", "Bagging Ensemble"),
+  RMSE = c(last_tree_rmse, ensemble_rmse),
+  R_squared = c(last_tree_rsq, ensemble_rsq)
+)
+
+print(performance_comparison)
+```
+```{r}
+# Plotting the predictions against actual values
+par(mfrow = c(1, 2))
+plot(boston_test$medv, last_tree_preds, 
+     main = "Last Tree: Predicted vs Actual",
+     xlab = "Actual Values", ylab = "Predicted Values",
+     pch = 16, col = "blue")
+abline(0, 1, col = "red", lwd = 2)
+
+plot(boston_test$medv, ensemble_preds, 
+     main = "Ensemble: Predicted vs Actual",
+     xlab = "Actual Values", ylab = "Predicted Values",
+     pch = 16, col = "green")
+abline(0, 1, col = "red", lwd = 2)
 ```
 
 ---
