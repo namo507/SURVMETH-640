@@ -176,12 +176,12 @@ bagged_trees_large <- foreach(b = 1:n_trees_large, .combine = list, .multicombin
   tree_model
 }
 
-# Create prediction function for the large tree ensemble
+# Creating prediction function for the large tree ensemble
 predict_bagging_large <- function(model_list, newdata) {
   # Get predictions from each tree
   preds <- lapply(model_list, predict, newdata = newdata)
   
-  # Convert to matrix
+  # Converting to matrix
   pred_matrix <- do.call(cbind, preds)
   
   # Average predictions
