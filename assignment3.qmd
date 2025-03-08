@@ -405,6 +405,7 @@ model_list <- caretList(
 model_results <- resamples(model_list)
 summary(model_results)
 ```
+
 ```{r}
 # Create visualization of model comparison
 dotplot(model_results, metric = "RMSE", main = "Cross-Validated RMSE by Model Type")
@@ -425,6 +426,7 @@ results_df <- data.frame(
 
 print(results_df)
 ```
+
 Looking at these results, I can clearly see that the Random Forest model (implemented with ranger) outperforms the Bagging model (treebag) by a significant margin. 
 
 The ranger model achieved an RMSE of 2.96 on the test set, compared to 3.65 for the treebag model which is about a 19% improvement in prediction accuracy. 
