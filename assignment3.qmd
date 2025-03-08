@@ -134,6 +134,11 @@ performance_comparison <- data.frame(
 
 print(performance_comparison)
 ```
+Looking at the performance comparison between the single last tree and the bagging ensemble, I see that the single tree model achieved an RMSE of about 4.86 and an R-squared of 0.67, which isn't terrible but definitely has room for improvement. 
+
+Now when I combine 100 trees through bagging, the RMSE drops substantially to 3.77 (about 22% improvement) and the R-squared jumps to 0.80, explaining a much higher proportion of the variance in housing prices. This clearly demonstrates why ensemble methods are so powerful since by averaging predictions across multiple trees trained on different bootstrap samples, I've effectively reduced the variance that comes from having a single decision tree. Each individual tree might be somewhat unstable and overfit to its specific bootstrap sample, but collectively they create a much more robust and accurate model.
+
+
 ```{r}
 # Plotting the predictions against actual values
 par(mfrow = c(1, 2))
