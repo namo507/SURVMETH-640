@@ -248,7 +248,7 @@ I would expect the large tree ensemble (maxdepth=30) to perform better than the 
 
 The reason being that balancing bias and variance in ensemble methods. Meaning in small trees (maxdepth=3), it is more biased because they can't capture complex relationships in the data but have low variance. When combined in a bagging ensemble, they reduce variance somewhat but remain limited by their inherent bias.
 
-Large trees (maxdepth=30) have lower bias as they can model more complex patterns, but higher variance ( which leads to potential overfitting). Bagging specifically addresses the variance problem by averaging multiple trees, making it particularly effective when using larger trees. This allows the ensemble to capture complex relationships while still controlling variance.
+Large trees (maxdepth=30) have lower bias as they can model more complex patterns, but higher variance (which leads to potential overfitting). Bagging specifically addresses the variance problem by averaging multiple trees, making it particularly effective when using larger trees. This allows the ensemble to capture complex relationships while still controlling variance.
 
 ---
 
@@ -293,25 +293,33 @@ dim(xgb_grid)
 **c) Using CV to tune, fit an XGBoost model.**
 
 ```{r}
-# Converting data to matrix format first
-predictors <- as.matrix(boston_train[, !names(boston_train) %in% "medv"])
-response <- boston_train$medv
+library(caret)
+library(xgboost)
 
-# Training XGBoost model with caret
-set.seed(789)
+# First, make sure we have clean numeric data for XGBoost
+# Select only numeric columns
+numeric_cols <- sapply(boston_train, is.numeric)
+boston_train_numeric <- boston_train[, numeric_cols]
+
+# Create predictor matrix and response vector
+x_train <- boston_train_numeric[, !names(boston_train_numeric) %in% "medv"]
+y_train <- boston_train_numeric$medv
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Train the XGBoost model
 xgb_model <- train(
-  x = predictors,
-  y = response,
+  x = x_train,  # numeric predictors only
+  y = y_train,  # numeric response
   method = "xgbTree",
   trControl = ctrl,
   tuneGrid = xgb_grid,
-  metric = "RMSE",
   verbose = TRUE
 )
 
+# Check the results of the model
 print(xgb_model)
-plot(xgb_model)
-
 # Getting the best tuning parameters
 xgb_model$bestTune
 
@@ -328,13 +336,11 @@ cat("XGBoost Test R²:", xgb_rsq, "\n")
 
 **d) Compare the performance of the boosting model with the models run previously in this assignment. How does it compare?**
 
-Looking at the performance metrics across all models I have built, the XGBoost boosting model demonstrates superior predictive power compared to both the small-tree and large-tree bagging ensembles.
+So the XGBoost model achieved an RMSE of about 3.07 and an R-squared of 0.87 on the test set, which edges out both the bagging approaches. 
 
-The XGBoost model achieves a significantly lower RMSE and higher R2 than the bagging approaches. This performance advantage is because of boosting's sequential learning process, where each tree focuses on correcting errors made by previous trees. While bagging reduces variance through averaging independent trees, boosting actively addresses both bias and variance by iteratively refining its predictions.
+When I compare this to the small tree bagging ensemble (RMSE 3.77, R² 0.80) and even the large tree bagging ensemble which performed better, XGBoost still shows superior predictive power. This makes perfect sense to me because unlike bagging, which builds independent trees and averages them, boosting works sequentially to correct mistakes from previous trees. 
 
-Interestingly, the most substantial improvement is seen when comparing XGBoost to the single small tree, with approximately a 25-30% reduction in prediction error. 
-
-Now, even compared to the large-tree bagging ensemble, XGBoost still shows an edge of roughly 5-10% in error reduction. This actually shows boosting's efficiency in extracting predictive patterns from the Boston housing data through an adaptive, error-focused algorithm and also ancareful hyperparameter tuning via cross-validation.
+I particularly notice that the best XGBoost model used relatively shallow trees (max_depth=3) but with a moderate learning rate (eta=0.1), allowing it to focus on the errors from previous iterations without overfitting. The sequential nature of boosting really pays off here as each tree is learning something new that previous trees missed, rather than just providing independent predictions to average.
 ---
 
 #### 4) Comparing Models with `caretList`
