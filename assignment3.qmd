@@ -231,10 +231,10 @@ performance_comparison_all <- data.frame(
   R_squared = c(last_tree_rsq, ensemble_rsq, large_ensemble_rsq)
 )
 
-# Display performance metrics
+# Displaying performance metrics
 print(performance_comparison_all)
 
-# Plot predictions vs actual
+# Plotting predictions vs actual
 plot(boston_test$medv, large_ensemble_preds,
      main = "Large Tree Ensemble: Predicted vs Actual",
      xlab = "Actual Values", ylab = "Predicted Values",
