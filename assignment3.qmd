@@ -309,6 +309,7 @@ dim(xgb_grid)
 ```{r}
 library(caret)
 library(xgboost)
+library(doParallel)
 
 # First, make sure we have clean numeric data for XGBoost
 # Select only numeric columns
@@ -318,6 +319,17 @@ boston_train_numeric <- boston_train[, numeric_cols]
 # Create predictor matrix and response vector
 x_train <- boston_train_numeric[, !names(boston_train_numeric) %in% "medv"]
 y_train <- boston_train_numeric$medv
+
+# Modify the trainControl to prevent connection issues
+ctrl <- trainControl(
+  method = "cv",           
+  number = 5,              
+  verboseIter = TRUE,      
+  allowParallel = FALSE    # Set to FALSE to avoid connection issues
+)
+
+# Set up parallel processing manually (safer approach)
+registerDoParallel(cores = 2)  # Using fewer cores can help avoid issues
 
 # Set seed for reproducibility
 set.seed(123)
@@ -332,13 +344,23 @@ xgb_model <- train(
   verbose = TRUE
 )
 
-# Check the results of the model
+# Stop parallel processing
+stopImplicitCluster()
+
+# Checking the results of the model
 print(xgb_model)
 # Getting the best tuning parameters
 xgb_model$bestTune
+```
 
+```{r}
 # Making predictions on test set
-xgb_preds <- predict(xgb_model, newdata = boston_test)
+# First make sure test data only includes numeric columns
+numeric_cols_test <- sapply(boston_test, is.numeric)
+boston_test_numeric <- boston_test[, numeric_cols_test]
+x_test <- boston_test_numeric[, !names(boston_test_numeric) %in% "medv"]
+
+xgb_preds <- predict(xgb_model, newdata = x_test)
 xgb_rmse <- sqrt(mean((xgb_preds - boston_test$medv)^2))
 xgb_rsq <- 1 - sum((boston_test$medv - xgb_preds)^2) / 
              sum((boston_test$medv - mean(boston_test$medv))^2)
