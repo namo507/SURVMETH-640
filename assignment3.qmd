@@ -164,15 +164,27 @@ abline(0, 1, col = "red", lwd = 2)
 ```{r}
 # Setting up parameters for large trees
 n_trees_large <- 100
-tree_control_large <- rpart.control(maxdepth = 30,
-                                   cp = 0.001) 
-# Since lower complexity parameter allows for  more splits
+tree_control_large <- rpart.control(maxdepth = 30, cp = 0.001) 
+# Lower complexity parameter allows more splits
 
-# Creating bagging ensemble with large trees
+# Setting up cluster with proper library exports
 cl <- makeCluster(4, outfile = "")
 registerDoParallel(cl)
+
+# Exporting necessary packages and variables to the workers
+clusterEvalQ(cl, {
+  library(rpart)
+  library(stats)
+})
+
+# Exporting objects needed by the workers
+clusterExport(cl, c("boston_train", "tree_control_large"))
+
+# Creating bagging ensemble with large trees
 set.seed(456)
-bagged_trees_large <- foreach(b = 1:n_trees_large, .combine = list, .multicombine = TRUE) %dopar% {
+bagged_trees_large <- foreach(b = 1:n_trees_large, .combine = list, 
+                             .multicombine = TRUE, 
+                             .packages = c("rpart")) %dopar% {
   # Bootstrap sample
   boot_indices <- sample(nrow(boston_train), replace = TRUE)
   boot_data <- boston_train[boot_indices, ]
@@ -182,6 +194,8 @@ bagged_trees_large <- foreach(b = 1:n_trees_large, .combine = list, .multicombin
   
   tree_model
 }
+
+stopCluster(cl)
 
 # Creating prediction function for the large tree ensemble
 predict_bagging_large <- function(model_list, newdata) {
