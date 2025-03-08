@@ -53,13 +53,13 @@ library(rpart)
 library(doParallel)
 library(rpart.plot)
 
-# Setting up parallel processing
+# Now setting up parallel processing
 registerDoParallel(cores = 4)
 
-# Setting number of trees for bagging
+# Then setting number of trees for bagging
 n_trees <- 100
 
-# Setting control parameters for small trees
+# Setting up control parameters for small trees
 tree_control <- rpart.control(maxdepth = 3, cp = 0.01)
 
 # Creating bagging ensemble using foreach
