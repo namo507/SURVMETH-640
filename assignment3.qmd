@@ -166,9 +166,11 @@ abline(0, 1, col = "red", lwd = 2)
 n_trees_large <- 100
 tree_control_large <- rpart.control(maxdepth = 30,
                                    cp = 0.001) 
-# Lower complexity parameter allows more splits
+# Since lower complexity parameter allows for  more splits
 
 # Creating bagging ensemble with large trees
+cl <- makeCluster(4, outfile = "")
+registerDoParallel(cl)
 set.seed(456)
 bagged_trees_large <- foreach(b = 1:n_trees_large, .combine = list, .multicombine = TRUE) %dopar% {
   # Bootstrap sample
