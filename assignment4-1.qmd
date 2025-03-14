@@ -61,22 +61,22 @@ barplot(table(drugs$CannabisUse),
 # Set seed for reproducibility
 set.seed(9574)
 
-# Create stratified partitioning based on the CannabisUse variable
-# This ensures balanced distribution of classes in both train and test sets
+# So creating a stratified partitioning based on the CannabisUse variable
+# which ensures balanced distribution of classes in both train and test sets
 inTrain <- createDataPartition(drugs$CannabisUse, 
                               p = .8, 
                               list = FALSE, 
                               times = 1)
 
-# Create training and test datasets
+# Creating training and test datasets
 drugs_train <- drugs[inTrain,]
 drugs_test <- drugs[-inTrain,]
 
-# Verify the split worked correctly
+# Verifying whether the split worked correctly
 cat("Training set dimensions:", dim(drugs_train), "\n")
 cat("Test set dimensions:", dim(drugs_test), "\n")
 
-# Check class distribution in both sets to ensure stratification worked
+# Checking class distribution in both sets to ensure stratification worked
 print("Class distribution in training set:")
 prop.table(table(drugs_train$CannabisUse)) * 100
 
