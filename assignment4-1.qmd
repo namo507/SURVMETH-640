@@ -38,13 +38,13 @@ table(drugs$Cannabis)
 
 # Creating a meaningful cannabis use outcome variable
 drugs$CannabisUse <- factor(
-  ifelse(drugs$Cannabis == "CL0", "Non-user",
-         ifelse(drugs$Cannabis %in% c("CL1", "CL2", "CL3"), "Occasional user", 
-                "Frequent user")),
-  levels = c("Non-user", "Occasional user", "Frequent user")
+  ifelse(drugs$Cannabis == "CL0", "Non_user",
+         ifelse(drugs$Cannabis %in% c("CL1", "CL2", "CL3"), "Occasional_user", 
+                "Frequent_user")),
+  levels = c("Non_user", "Occasional_user", "Frequent_user")
 )
 
-# Checking the distribution of the new outcome variable
+# Checking the updated factor levels
 table(drugs$CannabisUse)
 prop.table(table(drugs$CannabisUse)) * 100
 
@@ -108,7 +108,47 @@ rf_grid <- expand.grid(
 **e) Use `train()` from `caret` in order to grow the forest. Do not use any of the other drugs as predictors in this model. Determine the best model based on the tuning results.**
 
 ```{r}
+# First, I will exclude drug-related columns
+drug_cols <- grep("^(Alcohol|Amphet|Amyl|Benzos|Caff|Cannabis|Choc|Coke|Crack|Ecstasy|Heroin|Ketamine|Legalh|LSD|Meth|Mushrooms|Nicotine|Semer|VSA)$", 
+                  names(drugs_train), value = TRUE)
 
+# Creating a formula that includes all predictors except other drugs and the outcome
+predictors <- setdiff(names(drugs_train), c(drug_cols, "CannabisUse", "ID"))
+formula_str <- paste("CannabisUse ~", paste(predictors, collapse = " + "))
+rf_formula <- as.formula(formula_str)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Train the random forest model
+rf_model <- train(
+  rf_formula,
+  data = drugs_train,
+  method = "rf", # Random Forest
+  trControl = ctrl, # Training control parameters
+  tuneGrid = rf_grid, # Tuning grid
+  importance = TRUE, # Calculate variable importance
+  ntree = 500 # Number of trees to grow
+)
+```
+```{r}
+# tuning results
+print(rf_model)
+plot(rf_model)
+```
+```{r}
+# Showing the best tuning parameter
+cat("Best mtry value:", rf_model$bestTune$mtry, "\n")
+
+# Getting the final model performance
+print(rf_model$results)
+
+# Plotting variable importance for the final model
+varImpPlot(rf_model$finalModel,
+           main = "Variable Importance",
+           pch = 19,
+           col = "darkblue",
+           cex = 0.8)
 ```
 
 ---
