@@ -338,18 +338,166 @@ Now rather than solely focusing on prevention, these insights could inform harm 
 **a) Use `predict()` in order to predict class membership and probabilities in the test set.**
 
 ```{r}
+# Class predictions
+class_predictions <- predict(rf_model, newdata = drugs_test)
 
+# Probability predictions
+prob_predictions <- predict(rf_model, newdata = drugs_test, type = "prob")
+
+# Looking at the first few predictions
+head(class_predictions)
+head(prob_predictions)
 ```
 
 **b) Evaluate prediction performance based on two or three measures.**
 
 ```{r}
+# Creating confusion matrix
+conf_matrix <- confusionMatrix(class_predictions, drugs_test$CannabisUse)
+print(conf_matrix)
 
+# Extracting key performance metrics
+accuracy <- conf_matrix$overall["Accuracy"]
+kappa <- conf_matrix$overall["Kappa"]
+
+# Calculating balanced accuracy per class
+balanced_accuracy <- conf_matrix$byClass[, "Balanced Accuracy"]
+
+# Calculating F1 score per class
+precision <- conf_matrix$byClass[, "Precision"]
+recall <- conf_matrix$byClass[, "Recall"]
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Summarizing performance metrics
+performance_summary <- data.frame(
+  Metric = c("Accuracy", "Kappa", 
+             "Non_user Balanced Accuracy", "Occasional_user Balanced Accuracy", "Frequent_user Balanced Accuracy",
+             "Non_user F1 Score", "Occasional_user F1 Score", "Frequent_user F1 Score"),
+  Value = c(accuracy, kappa, 
+            balanced_accuracy, 
+            f1_score)
+)
+print(performance_summary)
+```
+
+```{r}
+library(pROC)
+# Creating ROC curves for each class
+roc_curves <- list()
+auc_values <- numeric(3)
+class_names <- levels(drugs_test$CannabisUse)
+
+par(mfrow = c(1, 3))
+for (i in 1:length(class_names)) {
+  # One-vs-rest approach for multiclass ROC
+  binary_outcome <- ifelse(drugs_test$CannabisUse == class_names[i], 1, 0)
+  roc_curves[[i]] <- roc(binary_outcome, prob_predictions[, i])
+  auc_values[i] <- auc(roc_curves[[i]])
+  
+  # Plotting ROC curve
+  plot(roc_curves[[i]], main = paste("ROC for", class_names[i]),
+       col = "blue", lwd = 2)
+  text(0.5, 0.3, paste("AUC =", round(auc_values[i], 3)))
+}
+par(mfrow = c(1, 1))
 ```
 
 **c) Look at the differences in performance metrics by gender. Are there any possible biases in the predictions?**
 
 ```{r}
+# Checking gender encoding
+table(drugs_test$Gender)
 
+# Splitting predictions by gender
+male_indices <- drugs_test$Gender == "-0.48246"
+female_indices <- drugs_test$Gender == "0.48246"
+
+# Creating separate confusion matrices for each gender
+male_conf <- confusionMatrix(class_predictions[male_indices], 
+                            drugs_test$CannabisUse[male_indices])
+female_conf <- confusionMatrix(class_predictions[female_indices], 
+                              drugs_test$CannabisUse[female_indices])
+
+# Extracting key metrics by gender
+gender_metrics <- data.frame(
+  Metric = c("Accuracy", "Kappa", 
+             "Non_user Balanced Accuracy", "Occasional_user Balanced Accuracy", "Frequent_user Balanced Accuracy"),
+  Male = c(male_conf$overall["Accuracy"], male_conf$overall["Kappa"],
+           male_conf$byClass[, "Balanced Accuracy"]),
+  Female = c(female_conf$overall["Accuracy"], female_conf$overall["Kappa"],
+             female_conf$byClass[, "Balanced Accuracy"])
+)
+
+
+print(gender_metrics)
 ```
 
+```{r}
+# Calculating error rates by gender and class
+male_error_rate <- 1 - diag(male_conf$table) / rowSums(male_conf$table)
+female_error_rate <- 1 - diag(female_conf$table) / rowSums(female_conf$table)
+
+error_by_gender <- data.frame(
+  Class = levels(drugs_test$CannabisUse),
+  Male_Error = male_error_rate,
+  Female_Error = female_error_rate,
+  Difference = abs(male_error_rate - female_error_rate)
+)
+
+print(error_by_gender)
+```
+```{r}
+# Visualizing gender differences in prediction accuracy
+barplot(t(as.matrix(error_by_gender[, c("Male_Error", "Female_Error")])), 
+        beside = TRUE,
+        names.arg = error_by_gender$Class,
+        col = c("skyblue", "pink"),
+        main = "Error Rates by Gender and Cannabis Use Category",
+        ylab = "Error Rate",
+        ylim = c(0, max(error_by_gender$Male_Error, error_by_gender$Female_Error) * 1.2))
+legend("topright", legend = c("Male", "Female"), fill = c("skyblue", "pink"))
+```
+```{r}
+# Calculating fairness metrics now
+# so calculating False Positive Rate by gender for each class
+calculate_fpr <- function(conf_matrix, class_level) {
+  class_index <- which(rownames(conf_matrix$table) == class_level)
+  fp <- sum(conf_matrix$table[, class_index]) - conf_matrix$table[class_index, class_index]
+  tn <- sum(conf_matrix$table) - sum(conf_matrix$table[, class_index]) - 
+    sum(conf_matrix$table[class_index, ]) + conf_matrix$table[class_index, class_index]
+  return(fp / (fp + tn))
+}
+fairness_metrics <- data.frame(
+  Class = levels(drugs_test$CannabisUse),
+  stringsAsFactors = FALSE
+)
+
+# Calculating FPR for each class and gender
+for (cls in levels(drugs_test$CannabisUse)) {
+  fairness_metrics[fairness_metrics$Class == cls, "Male_FPR"] <- 
+    calculate_fpr(male_conf, cls)
+  fairness_metrics[fairness_metrics$Class == cls, "Female_FPR"] <- 
+    calculate_fpr(female_conf, cls)
+}
+
+fairness_metrics$FPR_Difference <- abs(fairness_metrics$Male_FPR - fairness_metrics$Female_FPR)
+print(fairness_metrics)
+```
+
+```{r}
+# Assessing statistical parity (difference in predicted positive rates)
+male_predicted_positive <- table(class_predictions[male_indices]) / sum(male_indices)
+female_predicted_positive <- table(class_predictions[female_indices]) / sum(female_indices)
+
+statistical_parity <- data.frame(
+  Class = levels(drugs_test$CannabisUse),
+  Male_Rate = as.numeric(male_predicted_positive[levels(drugs_test$CannabisUse)]),
+  Female_Rate = as.numeric(female_predicted_positive[levels(drugs_test$CannabisUse)]),
+  stringsAsFactors = FALSE
+)
+statistical_parity$Difference <- abs(statistical_parity$Male_Rate - statistical_parity$Female_Rate)
+print(statistical_parity)
+```
+
+
+So yes, the gender analysis helps identify if the model shows systematic differences in predictive performance between genders, which would indicate bias that should be addressed before deployment.
