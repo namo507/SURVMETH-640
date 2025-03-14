@@ -1,8 +1,7 @@
 ---
-title: 'Assignment 3: Ensemble Methods'
-output:
-  html_document:
-    df_print: paged
+title: "Assignment 3: Namit Shrivastava"
+format: pdf
+editor: visual
 ---
 
 ## Setup
