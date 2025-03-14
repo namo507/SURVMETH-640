@@ -32,21 +32,56 @@ data(drugs)
 **a) Prepare an outcome variable. For this you can choose from the variables on drug consumption and pick one drug (or a combination of drugs) as the prediction objective. The resulting variable should be of class `factor`, but it can have more than two categories if needed.**
 
 ```{r}
+str(drugs)
+# Examining the Cannabis variable which appears to use "CL" categories
+table(drugs$Cannabis)
 
+# Creating a meaningful cannabis use outcome variable
+drugs$CannabisUse <- factor(
+  ifelse(drugs$Cannabis == "CL0", "Non-user",
+         ifelse(drugs$Cannabis %in% c("CL1", "CL2", "CL3"), "Occasional user", 
+                "Frequent user")),
+  levels = c("Non-user", "Occasional user", "Frequent user")
+)
+
+# Checking the distribution of the new outcome variable
+table(drugs$CannabisUse)
+prop.table(table(drugs$CannabisUse)) * 100
+
+# Visualizing the distribution
+barplot(table(drugs$CannabisUse), 
+        main="Cannabis Use Categories", 
+        col=c("skyblue", "lightgreen", "coral"),
+        ylim=c(0, max(table(drugs$CannabisUse))*1.2))
 ```
 
 **b) Next split the data into a training and a test part.**
 
 ```{r}
+# Set seed for reproducibility
 set.seed(9574)
 
-#inTrain <- createDataPartition(..., 
-#                               p = .8, 
-#                               list = FALSE, 
-#                               times = 1)
+# Create stratified partitioning based on the CannabisUse variable
+# This ensures balanced distribution of classes in both train and test sets
+inTrain <- createDataPartition(drugs$CannabisUse, 
+                              p = .8, 
+                              list = FALSE, 
+                              times = 1)
 
-# drugs_train <- drugs[inTrain,]
-# drugs_test <- drugs[-inTrain,]
+# Create training and test datasets
+drugs_train <- drugs[inTrain,]
+drugs_test <- drugs[-inTrain,]
+
+# Verify the split worked correctly
+cat("Training set dimensions:", dim(drugs_train), "\n")
+cat("Test set dimensions:", dim(drugs_test), "\n")
+
+# Check class distribution in both sets to ensure stratification worked
+print("Class distribution in training set:")
+prop.table(table(drugs_train$CannabisUse)) * 100
+
+print("Class distribution in test set:")
+prop.table(table(drugs_test$CannabisUse)) * 100
 ```
 
 **c) Specify the evaluation method for the `train()` function of `caret` with 10-fold cross-validation.**
