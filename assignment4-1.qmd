@@ -25,7 +25,7 @@ library(mlforsocialscience)
 data(drugs)
 ```
 
----
+------------------------------------------------------------------------
 
 #### 1) Predicting drug usage
 
@@ -39,7 +39,8 @@ table(drugs$Cannabis)
 # Creating a meaningful cannabis use outcome variable
 drugs$CannabisUse <- factor(
   ifelse(drugs$Cannabis == "CL0", "Non_user",
-         ifelse(drugs$Cannabis %in% c("CL1", "CL2", "CL3"), "Occasional_user", 
+         ifelse(drugs$Cannabis %in% c("CL1", "CL2", "CL3"), 
+                "Occasional_user", 
                 "Frequent_user")),
   levels = c("Non_user", "Occasional_user", "Frequent_user")
 )
@@ -109,7 +110,9 @@ rf_grid <- expand.grid(
 
 ```{r}
 # First, I will exclude drug-related columns
-drug_cols <- grep("^(Alcohol|Amphet|Amyl|Benzos|Caff|Cannabis|Choc|Coke|Crack|Ecstasy|Heroin|Ketamine|Legalh|LSD|Meth|Mushrooms|Nicotine|Semer|VSA)$", 
+drug_cols <- grep("^(Alcohol|Amphet|Amyl|Benzos|Caff|Cannabis
+                  |Choc|Coke|Crack|Ecstasy|Heroin|Ketamine|Legalh|LSD|Meth
+                  |Mushrooms|Nicotine|Semer|VSA)$", 
                   names(drugs_train), value = TRUE)
 
 # Creating a formula that includes all predictors except other drugs and the outcome
@@ -131,11 +134,13 @@ rf_model <- train(
   ntree = 500 # Number of trees to grow
 )
 ```
+
 ```{r}
 # tuning results
 print(rf_model)
 plot(rf_model)
 ```
+
 ```{r}
 # Showing the best tuning parameter
 cat("Best mtry value:", rf_model$bestTune$mtry, "\n")
@@ -151,7 +156,7 @@ varImpPlot(rf_model$finalModel,
            cex = 0.8)
 ```
 
----
+------------------------------------------------------------------------
 
 #### 2) Interpreting the model
 
@@ -175,10 +180,12 @@ var_imp_df <- data.frame(
 # Sorting by importance
 var_imp_df <- var_imp_df[order(var_imp_df$MeanDecreaseGini, decreasing = TRUE),]
 ```
+
 ```{r}
 # Creating more customized plot using ggplot2
 library(ggplot2)
-ggplot(var_imp_df[1:10,], aes(x = reorder(Variable, MeanDecreaseGini), y = MeanDecreaseGini)) +
+ggplot(var_imp_df[1:10,], aes(x = reorder(Variable, MeanDecreaseGini), 
+                              y = MeanDecreaseGini)) +
   geom_bar(stat = "identity", fill = "steelblue") +
   coord_flip() +
   labs(title = "Top 10 Variables for Predicting Cannabis Use",
@@ -200,18 +207,21 @@ Ok so looking at the variable importance plot for predicting cannabis use patter
 
 **Country and Ethnicity** variables suggest that cultural and regional factors impact cannabis use, likely reflecting differences in legal status, social acceptance, and availability across different regions and cultural groups.
 
-
 **b) Create some partial dependence plots. What are your interpretations of these plots?**
 
 ```{r}
 # Creating partial dependence plots for top numerical predictors
-pdp_openness <- partial(rf_model, pred.var = "Openness", which.class = "Frequent_user",
+pdp_openness <- partial(rf_model, pred.var = "Openness", 
+                        which.class = "Frequent_user",
                        plot = TRUE, rug = TRUE)
-pdp_neuroticism <- partial(rf_model, pred.var = "Neuroticism", which.class = "Frequent_user",
+pdp_neuroticism <- partial(rf_model, pred.var = "Neuroticism", 
+                           which.class = "Frequent_user",
                           plot = TRUE, rug = TRUE)
-pdp_ss <- partial(rf_model, pred.var = "SS", which.class = "Frequent_user",
+pdp_ss <- partial(rf_model, pred.var = "SS", 
+                  which.class = "Frequent_user",
                  plot = TRUE, rug = TRUE)
-pdp_impulsive <- partial(rf_model, pred.var = "Impulsive", which.class = "Frequent_user",
+pdp_impulsive <- partial(rf_model, pred.var = "Impulsive", 
+                         which.class = "Frequent_user",
                         plot = TRUE, rug = TRUE)
 
 # Creating a grid of pdp plots for better visualization
@@ -225,21 +235,25 @@ par(mfrow = c(1, 1))
 
 ```{r}
 # Create partial dependence plots for numerical predictors but don't plot immediately
-pdp_openness <- partial(rf_model, pred.var = "Openness", which.class = "Frequent_user", 
+pdp_openness <- partial(rf_model, pred.var = "Openness", 
+                        which.class = "Frequent_user", 
                         plot = FALSE)  # Set plot = FALSE to get data
-pdp_ss <- partial(rf_model, pred.var = "SS", which.class = "Frequent_user", 
+pdp_ss <- partial(rf_model, pred.var = "SS", 
+                  which.class = "Frequent_user", 
                   plot = FALSE)  # Set plot = FALSE to get data
 
 # Now these are data frames we can use with ggplot2
 head(pdp_openness)  # Check the structure
 head(pdp_ss)  # Check the structure
 ```
+
 ```{r}
 # Plot for Sensation Seeking
 ggplot(pdp_ss, aes(x = SS, y = yhat)) +
   geom_line(color = "blue", size = 1.2) +
   geom_rug(sides = "b", alpha = 0.3) +
-  labs(title = "Partial Dependence Plot: Sensation Seeking on Frequent Cannabis Use",
+  labs(title = "Partial Dependence Plot: Sensation 
+       Seeking on Frequent Cannabis Use",
        x = "Sensation Seeking Score",
        y = "Probability of Frequent Cannabis Use") +
   theme_minimal()
@@ -248,7 +262,8 @@ ggplot(pdp_ss, aes(x = SS, y = yhat)) +
 ggplot(pdp_openness, aes(x = Openness, y = yhat)) +
   geom_line(color = "red", size = 1.2) +
   geom_rug(sides = "b", alpha = 0.3) +
-  labs(title = "Partial Dependence Plot: Openness on Frequent Cannabis Use",
+  labs(title = "Partial Dependence Plot: Openness 
+       on Frequent Cannabis Use",
        x = "Openness Score",
        y = "Probability of Frequent Cannabis Use") +
   theme_minimal()
@@ -270,68 +285,58 @@ Examining the partial dependence plots shows me some insightful patterns about h
 
 ```{r}
 # Creating ICE plot for Sensation Seeking (SS)
-ice_ss <- partial(rf_model, pred.var = "SS", which.class = "Frequent_user", 
+ice_ss <- partial(rf_model, pred.var = "SS", 
+                  which.class = "Frequent_user", 
                  ice = TRUE, center = TRUE, plot = FALSE)
 
 # Creating ICE plot for Openness
-ice_openness <- partial(rf_model, pred.var = "Openness", which.class = "Frequent_user", 
+ice_openness <- partial(rf_model, pred.var = "Openness", 
+                        which.class = "Frequent_user", 
                        ice = TRUE, center = TRUE, plot = FALSE)
 
 # Plotting with pdp package's built-in function
 pdp::plotPartial(ice_ss, rug = TRUE, train = drugs_train, alpha = 0.1,
-                main = "ICE Plot: Effect of Sensation Seeking on Frequent Cannabis Use")
+                main = "ICE Plot: Effect of Sensation 
+                Seeking on Frequent Cannabis Use")
 
 pdp::plotPartial(ice_openness, rug = TRUE, train = drugs_train, alpha = 0.1,
-                main = "ICE Plot: Effect of Openness on Frequent Cannabis Use")
+                main = "ICE Plot: Effect of Openness 
+                on Frequent Cannabis Use")
 ```
 
 So looking at these Individual Conditional Expectation (ICE) plots which provide a better and deeper insights than the aggregate partial dependence plots alone:
 
-**Variation in individual responses to Sensation Seeking (SS)** 
+**Variation in individual responses to Sensation Seeking (SS)**
 
 So the ICE plot shows substantial heterogeneity in how individuals respond to increases in sensation seeking. While the overall trend (shown by the red PDP line) is positive, some individuals show much steeper increases in cannabis use probability than others as SS increases. This suggests that sensation seeking interacts with other characteristics as for some individuals, higher SS dramatically increases cannabis use probability, while for others, the effect is more modest.
 
-**Non-uniform effects of Openness**
-The ICE curves for Openness reveal interesting patterns where some individuals show plateaus or even slight decreases in cannabis use probability at certain openness levels before increasing again. This non-uniformity suggests complex interactions between openness and other variables that the aggregate PDP masks. For instance, high openness might have different effects on cannabis use depending on factors like education level or age.
+**Non-uniform effects of Openness** The ICE curves for Openness reveal interesting patterns where some individuals show plateaus or even slight decreases in cannabis use probability at certain openness levels before increasing again. This non-uniformity suggests complex interactions between openness and other variables that the aggregate PDP masks. For instance, high openness might have different effects on cannabis use depending on factors like education level or age.
 
-**Crossing curves indicate interactions** 
-In both plots, we see ICE curves that cross each other rather than running parallel. This crossing pattern indicates important interaction effects between these variables and other predictors. For example, at low openness levels, two individuals might have very similar cannabis use probabilities, but as openness increases, their probabilities diverge significantly due to differences in other characteristics.
+**Crossing curves indicate interactions** In both plots, we see ICE curves that cross each other rather than running parallel. This crossing pattern indicates important interaction effects between these variables and other predictors. For example, at low openness levels, two individuals might have very similar cannabis use probabilities, but as openness increases, their probabilities diverge significantly due to differences in other characteristics.
 
-**Clusters of similar curves**
-Looking carefully at the plots reveals clusters of ICE curves with similar shapes, suggesting subgroups in the population that respond similarly to changes in these personality traits. These clusters might represent meaningful subpopulations with different risk profiles for cannabis use.
+**Clusters of similar curves** Looking carefully at the plots reveals clusters of ICE curves with similar shapes, suggesting subgroups in the population that respond similarly to changes in these personality traits. These clusters might represent meaningful subpopulations with different risk profiles for cannabis use.
 
-**Threshold effects for individuals**
-Many individual curves show threshold effects where cannabis use probability remains relatively stable until a certain level of the personality trait is reached, then increases sharply. These thresholds appear to vary across individuals, highlighting personalized risk patterns that aggregate measures would miss.
-
-
+**Threshold effects for individuals** Many individual curves show threshold effects where cannabis use probability remains relatively stable until a certain level of the personality trait is reached, then increases sharply. These thresholds appear to vary across individuals, highlighting personalized risk patterns that aggregate measures would miss.
 
 **d) What are some possible actions that can be taken using the results of these interpretations?**
 
-**Targeted Prevention Programs**
-Now my model clearly identifies personality traits like sensation-seeking and openness as strong predictors of cannabis use patterns. Prevention programs could be designed specifically for individuals with high scores on these traits, offering alternative channels for novelty-seeking and creative expression that don't involve substance use. These targeted interventions would likely be more effective than general anti-drug campaigns.
+**Targeted Prevention Programs** Now my model clearly identifies personality traits like sensation-seeking and openness as strong predictors of cannabis use patterns. Prevention programs could be designed specifically for individuals with high scores on these traits, offering alternative channels for novelty-seeking and creative expression that don't involve substance use. These targeted interventions would likely be more effective than general anti-drug campaigns.
 
-**Age-Specific Educational Approaches**
-Since age appears as a significant predictor, educational content should be tailored differently across age groups. For younger individuals showing higher cannabis use probability, education could focus on brain development impacts and short-term consequences, while for older individuals, messaging might focus on interaction with health conditions or medications common in their age group.
+**Age-Specific Educational Approaches** Since age appears as a significant predictor, educational content should be tailored differently across age groups. For younger individuals showing higher cannabis use probability, education could focus on brain development impacts and short-term consequences, while for older individuals, messaging might focus on interaction with health conditions or medications common in their age group.
 
-**Personalized Risk Assessment Tools**
-Now the ICE plots reveal substantial individual variation in how personality traits influence cannabis use. This suggests developing screening tools that incorporate multiple factors rather than focusing on single risk indicators. Healthcare providers could use these tools to identify individuals at higher risk based on their unique combination of traits.
+**Personalized Risk Assessment Tools** Now the ICE plots reveal substantial individual variation in how personality traits influence cannabis use. This suggests developing screening tools that incorporate multiple factors rather than focusing on single risk indicators. Healthcare providers could use these tools to identify individuals at higher risk based on their unique combination of traits.
 
-**Educational Policy Refinement**
-The non-linear relationship between education level and cannabis use suggests that both very low and very high education levels correlate with lower use. This insight could inform educational policies that incorporate substance education at critical educational transition points where risk may be elevated.
+**Educational Policy Refinement** The non-linear relationship between education level and cannabis use suggests that both very low and very high education levels correlate with lower use. This insight could inform educational policies that incorporate substance education at critical educational transition points where risk may be elevated.
 
-**Cultural Competency in Interventions**
-Given that country and ethnicity emerged as significant predictors, interventions should be culturally tailored rather than using one-size-fits-all approaches. This might include consideration of cultural attitudes toward cannabis, legal contexts, and culturally specific protective factors.
+**Cultural Competency in Interventions** Given that country and ethnicity emerged as significant predictors, interventions should be culturally tailored rather than using one-size-fits-all approaches. This might include consideration of cultural attitudes toward cannabis, legal contexts, and culturally specific protective factors.
 
-**Threshold-Based Interventions** 
-Ok now the ICE plots revealed threshold effects where risk increases sharply at certain levels of personality traits. These thresholds could be used to develop "stepped care" models where more intensive intervention resources are allocated when individuals cross specific risk thresholds.
+**Threshold-Based Interventions** Ok now the ICE plots revealed threshold effects where risk increases sharply at certain levels of personality traits. These thresholds could be used to develop "stepped care" models where more intensive intervention resources are allocated when individuals cross specific risk thresholds.
 
-**Research on Interaction Effects**
-So the crossing ICE curves indicate important interaction effects between predictors. This suggests value in further research specifically designed to understand how combinations of factors (like openness and education, or sensation-seeking and age) jointly influence cannabis use patterns.
+**Research on Interaction Effects** So the crossing ICE curves indicate important interaction effects between predictors. This suggests value in further research specifically designed to understand how combinations of factors (like openness and education, or sensation-seeking and age) jointly influence cannabis use patterns.
 
-**Harm Reduction Approaches**
-Now rather than solely focusing on prevention, these insights could inform harm reduction strategies for frequent cannabis users, particularly targeting those with high impulsivity who might benefit from specific supports around moderation and safer use practices.
+**Harm Reduction Approaches** Now rather than solely focusing on prevention, these insights could inform harm reduction strategies for frequent cannabis users, particularly targeting those with high impulsivity who might benefit from specific supports around moderation and safer use practices.
 
----
+------------------------------------------------------------------------
 
 #### 3) Prediction and Bias
 
@@ -342,7 +347,8 @@ Now rather than solely focusing on prevention, these insights could inform harm 
 class_predictions <- predict(rf_model, newdata = drugs_test)
 
 # Probability predictions
-prob_predictions <- predict(rf_model, newdata = drugs_test, type = "prob")
+prob_predictions <- predict(rf_model, newdata = drugs_test, 
+                            type = "prob")
 
 # Looking at the first few predictions
 head(class_predictions)
@@ -371,8 +377,11 @@ f1_score <- 2 * (precision * recall) / (precision + recall)
 # Summarizing performance metrics
 performance_summary <- data.frame(
   Metric = c("Accuracy", "Kappa", 
-             "Non_user Balanced Accuracy", "Occasional_user Balanced Accuracy", "Frequent_user Balanced Accuracy",
-             "Non_user F1 Score", "Occasional_user F1 Score", "Frequent_user F1 Score"),
+             "Non_user Balanced Accuracy", 
+             "Occasional_user Balanced Accuracy", 
+             "Frequent_user Balanced Accuracy",
+             "Non_user F1 Score", "Occasional_user F1 Score", 
+             "Frequent_user F1 Score"),
   Value = c(accuracy, kappa, 
             balanced_accuracy, 
             f1_score)
@@ -421,7 +430,9 @@ female_conf <- confusionMatrix(class_predictions[female_indices],
 # Extracting key metrics by gender
 gender_metrics <- data.frame(
   Metric = c("Accuracy", "Kappa", 
-             "Non_user Balanced Accuracy", "Occasional_user Balanced Accuracy", "Frequent_user Balanced Accuracy"),
+             "Non_user Balanced Accuracy", 
+             "Occasional_user Balanced Accuracy", 
+             "Frequent_user Balanced Accuracy"),
   Male = c(male_conf$overall["Accuracy"], male_conf$overall["Kappa"],
            male_conf$byClass[, "Balanced Accuracy"]),
   Female = c(female_conf$overall["Accuracy"], female_conf$overall["Kappa"],
@@ -446,6 +457,7 @@ error_by_gender <- data.frame(
 
 print(error_by_gender)
 ```
+
 ```{r}
 # Visualizing gender differences in prediction accuracy
 barplot(t(as.matrix(error_by_gender[, c("Male_Error", "Female_Error")])), 
@@ -457,6 +469,7 @@ barplot(t(as.matrix(error_by_gender[, c("Male_Error", "Female_Error")])),
         ylim = c(0, max(error_by_gender$Male_Error, error_by_gender$Female_Error) * 1.2))
 legend("topright", legend = c("Male", "Female"), fill = c("skyblue", "pink"))
 ```
+
 ```{r}
 # Calculating fairness metrics now
 # so calculating False Positive Rate by gender for each class
@@ -498,6 +511,5 @@ statistical_parity <- data.frame(
 statistical_parity$Difference <- abs(statistical_parity$Male_Rate - statistical_parity$Female_Rate)
 print(statistical_parity)
 ```
-
 
 So yes, the gender analysis helps identify if the model shows systematic differences in predictive performance between genders, which would indicate bias that should be addressed before deployment.
