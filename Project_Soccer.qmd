@@ -1,0 +1,6 @@
+---
+title: "Project_Soccer"
+author: "Namit Shrivastava"
+format: pdf
+editor: visual
+---
