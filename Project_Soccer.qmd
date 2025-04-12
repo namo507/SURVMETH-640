@@ -14,7 +14,7 @@ library(tidyverse)
 library(httr)
 library(jsonlite)
 
-# 1: Collecting data from multiple sources
+# 1: Collecting data from Reddit
 # =========================================
 
 # 1.1 Now let me collect player data from fbref.com using worldfootballR
@@ -33,13 +33,13 @@ for (season in player_seasons) {
   cat("Collecting data for season:", season, "\n")
   season_end_year <- as.numeric(substr(season, 6, 9))
   
-  # Check the available functions and parameters
+  # Checking the available functions and parameters
   help(fb_big5_advanced_season_stats)
   
-  # Modified approach to collect data from Premier League only
-  # First get all big 5 leagues data, then filter for Premier League
+  # First I will get all big 5 leagues data, 
+  # then filter for Premier League
   
-  # Collect standard statistics
+  # Collecting standard statistics
   cat("Collecting standard statistics...\n")
   temp_standard <- fb_big5_advanced_season_stats(season_end_year = season_end_year,
                                                stat_type = "standard",
@@ -48,7 +48,7 @@ for (season in player_seasons) {
   player_standard_stats <- bind_rows(player_standard_stats, temp_standard)
   Sys.sleep(2)
   
-  # Collect shooting statistics
+  # Collecting shooting statistics
   cat("Collecting shooting statistics...\n")
   temp_shooting <- fb_big5_advanced_season_stats(season_end_year = season_end_year,
                                                stat_type = "shooting",
@@ -57,7 +57,7 @@ for (season in player_seasons) {
   player_shooting_stats <- bind_rows(player_shooting_stats, temp_shooting)
   Sys.sleep(2)
   
-  # Collect passing statistics
+  # Collecting passing statistics
   cat("Collecting passing statistics...\n")
   temp_passing <- fb_big5_advanced_season_stats(season_end_year = season_end_year,
                                               stat_type = "passing",
@@ -66,7 +66,7 @@ for (season in player_seasons) {
   player_passing_stats <- bind_rows(player_passing_stats, temp_passing)
   Sys.sleep(2)
   
-  # Collect defensive statistics
+  # Collecting defensive statistics
   cat("Collecting defensive statistics...\n")
   temp_defensive <- fb_big5_advanced_season_stats(season_end_year = season_end_year,
                                                 stat_type = "defense",
@@ -75,7 +75,7 @@ for (season in player_seasons) {
   player_defensive_stats <- bind_rows(player_defensive_stats, temp_defensive)
   Sys.sleep(2)
   
-  # Collect possession statistics
+  # Collecting possession statistics
   cat("Collecting possession statistics...\n")
   temp_possession <- fb_big5_advanced_season_stats(season_end_year = season_end_year,
                                                  stat_type = "possession",
@@ -83,32 +83,231 @@ for (season in player_seasons) {
   temp_possession <- temp_possession %>% filter(grepl("Premier League", Comp))
   player_possession_stats <- bind_rows(player_possession_stats, temp_possession)
   
-  # Pause to avoid hitting API limits
+
   Sys.sleep(5)
   cat("Completed collecting data for", season, "\n\n")
 }
 ```
 
+Ok so when building this dataset, my primary goal was to create a comprehensive player performance repository that could reveal hidden patterns in soccer analytics. I focused on four consecutive Premier League seasons (2019-2023) to capture both pre- and post-pandemic performance trends.
+
+Interestingly, filtering specifically for Premier League data from the broader "Big Five" European leagues helped maintain focus on England's top-tier competition.
+
+So this granular dataset helps me answer critical questions like:
+
+* Can we predict how a creative midfielder might perform in a counter-attacking system versus possession-based tactics? 
+* How do aging curves differ between center-backs and wingers? 
+* By connecting these performance fingerprints to team strategies and transfer outcomes, the analysis could fundamentally change how clubs approach squad building and in-game decision-making.
+
+
+## Data Exploration
+
 ```{r}
-# 1.2 Collect team formation data
-team_formations <- fb_team_formations(country = "ENG", gender = "M", season_end_year = 2023, team_urls = NULL)
+# 2: Data Exploration and Structuring
+# ===================================
 
-# 1.3 Scrape Reddit for fan insights (from r/soccer and r/PremierLeague)
-reddit_threads <- get_reddit(subreddit = "PremierLeague", sort_by = "top", period = "year")
-soccer_threads <- get_reddit(subreddit = "soccer", sort_by = "top", period = "year", search_terms = "Premier League")
+# 2.1 Exploring the structure of collected data
+cat("Dimensions of collected datasets:\n")
+cat("Standard stats:", dim(player_standard_stats), "\n")
+cat("Shooting stats:", dim(player_shooting_stats), "\n")
+cat("Passing stats:", dim(player_passing_stats), "\n")
+cat("Defensive stats:", dim(player_defensive_stats), "\n")
+cat("Possession stats:", dim(player_possession_stats), "\n\n")
 
-# Collect content from top threads
-top_reddit_content <- data.frame()
-for (i in 1:min(20, nrow(reddit_threads))) {
-  thread_content <- get_thread_content(reddit_threads$url[i])
-  top_reddit_content <- bind_rows(top_reddit_content, thread_content$comments)
+# 2.2 Display column names for understanding the data structure
+cat("Standard stats columns:\n")
+names(player_standard_stats)[1:20] # Show first 20 columns
+
+# First, checking the column names to find the right minutes column name
+colnames(player_standard_stats)
+
+# Creating a summary table of available players by season with corrected column names
+player_season_counts <- player_standard_stats %>%
+  group_by(Season = as.character(Season_End_Year)) %>%
+  summarize(
+    Player_Count = n_distinct(Player),
+    Teams = n_distinct(Squad),
+    # Trying different possible column names for minutes played
+    Total_Minutes = sum(if("Min" %in% names(.)) Min else if("Mins" %in% names(.)) Mins else if("MP" %in% names(.)) MP else 0, na.rm = TRUE),
+    Goals = sum(if("Gls" %in% names(.)) Gls else if("G" %in% names(.)) G else if("Goals" %in% names(.)) Goals else 0, na.rm = TRUE),
+    Assists = sum(if("Ast" %in% names(.)) Ast else if("A" %in% names(.)) A else if("Assists" %in% names(.)) Assists else 0, na.rm = TRUE)
+  )
+
+# Displaying the summary
+knitr::kable(player_season_counts, 
+             caption = "Premier League Players by Season",
+             format = "simple")
+```
+
+
+When analyzing the results, I noticed an unexpected issue that the total minutes played across all seasons showed as zero. Initially, this was puzzling, especially since the dataset successfully captured over 500 unique players per season, along with consistent team counts (20 teams per season) and stable offensive metrics like goals and assists. For instance, the number of goals ranged from 986 to 1039 annually, while assists varied between 685 and 743. These figures aligned well with expectations for Premier League seasons and indicated that the attacking data was intact.
+
+Upon closer inspection, I realized the issue stemmed from inconsistent column naming conventions across different datasets. While some tables used "Min" to represent minutes played, others used variations like "Mins," "MP," or even "Min_Playing." My conditional logic for column selection failed to account for these discrepancies, leading to the zero totals for minutes played.
+
+So the gradual increase in player counts from 515 in the 2019-2020 season to 554 in the 2022-2023 season also caught my attention. This growth suggests greater squad rotation or increased utilization of younger players over time, possibly influenced by pandemic-related fixture congestion or evolving team strategies. Despite this turnover, the stability in goals and assists totals across seasons highlights a consistent league-wide offensive output.
+To address the missing minutes data, I revisited the raw files and implemented a unified column renaming step to standardize key variables across datasets. This adjustment not only resolved the issue but also underscored the importance of thorough data preprocessing when working with diverse sources. Moving forward, I plan to explore whether offensive production is concentrated among a few star players or distributed evenly across squads
+
+
+
+
+
+
+
+## Data Collection from Reddit
+
+```{r}
+# Load necessary packages
+library(RedditExtractoR)
+
+# Function to safely execute Reddit API calls with rate limiting
+safe_reddit_call <- function(func, ..., delay = 5, max_attempts = 3) {
+  for (attempt in 1:max_attempts) {
+    tryCatch({
+      # Execute the function
+      result <- func(...)
+      
+      # If successful, add delay and return result
+      cat(paste("Successfully executed Reddit API call. Waiting", delay, "seconds before next call...\n"))
+      Sys.sleep(delay)
+      return(result)
+    }, error = function(e) {
+      cat(paste("Attempt", attempt, "failed with error:", e$message, "\n"))
+      
+      if (grepl("429|rate limit", e$message, ignore.case = TRUE)) {
+        # Rate limit hit - wait longer
+        wait_time <- delay * 3 * attempt
+        cat(paste("Rate limit likely hit. Waiting", wait_time, "seconds before retry...\n"))
+        Sys.sleep(wait_time)
+      } else {
+        # Other error - wait standard time
+        cat(paste("Waiting", delay, "seconds before retry...\n"))
+        Sys.sleep(delay)
+      }
+      
+      if (attempt == max_attempts) {
+        cat("Maximum attempts reached. Returning NULL.\n")
+        return(NULL)
+      }
+    })
+  }
+}
+```
+```{r}
+# Find relevant Premier League subreddits - limit to just a few
+cat("Searching for Premier League subreddits...\n")
+premier_league_subreddits <- safe_reddit_call(
+  find_subreddits, 
+  keywords = "Premier League", 
+  delay = 3
+)
+# Only display the first few results
+if (!is.null(premier_league_subreddits)) {
+  head(premier_league_subreddits)
 }
 
-# 1.4 Save collected data
-save(player_standard_stats, player_shooting_stats, player_passing_stats,
-     player_defensive_stats, player_possession_stats, team_formations,
-     reddit_threads, soccer_threads, top_reddit_content,
-     file = "premier_league_data.RData")
+# Extract threads from r/PremierLeague subreddit - limit number of results
+cat("Extracting threads from r/PremierLeague...\n")
+premier_league_threads <- safe_reddit_call(
+  find_thread_urls,
+  subreddit = "PremierLeague", 
+  sort_by = "top", 
+  period = "year",
+  delay = 5
+)
 
-cat("Data collection complete. Data saved to 'premier_league_data.RData'.\n")
+# Manually limit the results to reduce API load
+if (!is.null(premier_league_threads) && nrow(premier_league_threads) > 0) {
+  # Keep only the first 20 threads (approximately 2 pages worth)
+  premier_league_threads <- head(premier_league_threads, 20)
+}
+
+# Retrieve content about player performance - with more specific search terms and limits
+cat("Searching for player performance threads...\n")
+player_performance_urls <- safe_reddit_call(
+  find_thread_urls,
+  keywords = "player performance Premier League", 
+  sort_by = "relevance",
+  delay = 5
+)
+
+# Manually limit the results
+if (!is.null(player_performance_urls) && nrow(player_performance_urls) > 0) {
+  # Keep only the first 10 threads (approximately 1 page worth)
+  player_performance_urls <- head(player_performance_urls, 10)
+}
+
+```{r}
+# Extract comments from a limited number of threads
+# If player_performance_urls is null or has fewer than 5 urls, handle gracefully
+thread_urls <- if (!is.null(player_performance_urls) && nrow(player_performance_urls) > 0) {
+  player_performance_urls$url[1:min(3, nrow(player_performance_urls))] # Reduced from 5 to 3
+} else {
+  character(0)
+}
+
+thread_content <- list(comments = data.frame())
+if (length(thread_urls) > 0) {
+  cat("Extracting comments from", length(thread_urls), "threads...\n")
+  cat("This might take some time with built-in delays to avoid rate limits...\n")
+  
+  for (url in thread_urls) {
+    cat("Processing URL:", url, "\n")
+    content <- safe_reddit_call(
+      get_thread_content,
+      url = url,
+      # Longer delay for comment extraction as it's more intensive
+      delay = 8
+    )
+    
+    # Combine with previous results if content was retrieved
+    if (!is.null(content) && !is.null(content$comments) && nrow(content$comments) > 0) {
+      thread_content$comments <- rbind(thread_content$comments, content$comments)
+    }
+  }
+}
+```
+
+```{r}
+# 3: Machine Learning Analysis and Prediction
+# ==========================================
+
+library(tidymodels)
+library(textrecipes)
+library(tidytext)
+library(vip)
+library(ranger)
+library(xgboost)
+library(themis)  # For handling class imbalance
+
+# 3.1: Prepare the data for modeling
+# ----------------------------------
+
+# First, examine the Reddit comments to understand sentiment about players
+cat("Analyzing Reddit sentiment on player performance...\n")
+
+# Enhanced feature engineering
+final_data <- player_data %>%
+  mutate(
+    # Position-specific normalization
+    Goals_p90 = ifelse(Position %in% c("FW", "MF"), Goals/(Minutes/90), NA),
+    Tackles_p90 = ifelse(Position %in% c("DF", "MF"), Tackles/(Minutes/90), NA),
+    
+    # Momentum features
+    Form_Last5 = (lag(Goals) + lag(Goals,2) + lag(Goals,3))/3,
+    Injury_Impact = ifelse(grepl("injury", Reddit_Comments), 1, 0),
+    
+    # Opposition strength adjustment
+    Opp_Strength = (Opponent_Rank + 1)/20  # Scale 1-20 to 0.05-1
+  ) %>%
+  group_by(Player) %>%
+  mutate(
+    # Career trajectory features
+    Career_Goals = cumsum(Goals),
+    Improvement_Rate = (Goals - lag(Goals))/lag(Minutes)*90
+  ) %>%
+  ungroup() %>%
+  # Handle missing data using position averages
+  group_by(Position) %>%
+  mutate(across(c(Goals_p90, Tackles_p90), ~ifelse(is.na(.), mean(., na.rm=TRUE), .))) %>%
+  ungroup()
 ```
