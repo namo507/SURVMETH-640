@@ -1411,3 +1411,132 @@ build_xg_model <- function(shots_data) {
   return(list(model = xg_fit, roc_auc = roc_auc, heatmap = heatmap))
 }
 ```
+
+
+
+
+```{r}
+# Premier League Soccer Analytics
+# ==============================
+# This script collects, analyzes, and visualizes Premier League data
+# to provide insights into player performance, team tactics, and transfer market dynamics
+
+# Load required libraries
+library(worldfootballR)  # For football data collection
+library(tidyverse)       # For data manipulation and visualization
+library(tidymodels)      # For machine learning analysis
+library(vip)             # For visualizing variable importance
+library(ggsoccer)        # For soccer pitch visualizations
+library(RColorBrewer)    # For color palettes
+library(plotly)          # For interactive plots
+library(ggrepel)         # For text labels that don't overlap
+library(ranger)          # For random forest models
+library(patchwork)       # For combining multiple plots
+
+# Set random seed for reproducibility
+set.seed(123)
+```
+
+```{r}
+# 1. Data Collection
+# =================
+
+# 1.1 Collect Premier League data from fbref.com using worldfootballR
+# Getting data from the 2019-2020, 2020-2021, 2021-2022, and 2022-2023 seasons
+player_seasons <- c("2019-2020", "2020-2021", "2021-2022", "2022-2023")
+
+# Initialize empty data frames for each type of statistics
+player_standard_stats <- data.frame()
+player_shooting_stats <- data.frame()
+player_passing_stats <- data.frame()
+player_defensive_stats <- data.frame()
+player_possession_stats <- data.frame()
+player_gk_stats <- data.frame()
+
+# Function to safely collect data with error handling
+collect_player_data <- function(season_end_year, stat_type) {
+  cat(paste0("Collecting ", stat_type, " statistics for season ending in ", season_end_year, "...\n"))
+  
+  tryCatch({
+    # Use worldfootballR to get the data
+    temp_data <- fb_big5_advanced_season_stats(
+      season_end_year = season_end_year,
+      stat_type = stat_type,
+      team_or_player = "player"
+    )
+    
+    # Filter for Premier League only
+    temp_data <- temp_data %>% 
+      filter(grepl("Premier League", Comp))
+    
+    # Add a short delay to avoid overwhelming the server
+    Sys.sleep(2)
+    
+    return(temp_data)
+  }, 
+  error = function(e) {
+    cat("Error collecting data:", e$message, "\n")
+    return(data.frame())
+  })
+}
+
+# Looping through seasons to collect data
+for (season in player_seasons) {
+  cat("\n==== Collecting data for season:", season, "====\n")
+  season_end_year <- as.numeric(substr(season, 6, 9))
+  
+  # Collect standard statistics
+  temp_standard <- collect_player_data(season_end_year, "standard")
+  if (nrow(temp_standard) > 0) {
+    player_standard_stats <- bind_rows(player_standard_stats, temp_standard)
+  }
+  
+  # Collect shooting statistics
+  temp_shooting <- collect_player_data(season_end_year, "shooting")
+  if (nrow(temp_shooting) > 0) {
+    player_shooting_stats <- bind_rows(player_shooting_stats, temp_shooting)
+  }
+  
+  # Collect passing statistics
+  temp_passing <- collect_player_data(season_end_year, "passing")
+  if (nrow(temp_passing) > 0) {
+    player_passing_stats <- bind_rows(player_passing_stats, temp_passing)
+  }
+  
+  # Collect defensive statistics
+  temp_defensive <- collect_player_data(season_end_year, "defense")
+  if (nrow(temp_defensive) > 0) {
+    player_defensive_stats <- bind_rows(player_defensive_stats, temp_defensive)
+  }
+  
+  # Collect possession statistics
+  temp_possession <- collect_player_data(season_end_year, "possession")
+  if (nrow(temp_possession) > 0) {
+    player_possession_stats <- bind_rows(player_possession_stats, temp_possession)
+  }
+  
+  # Collect goalkeeper statistics
+  temp_gk <- collect_player_data(season_end_year, "keeper")
+  if (nrow(temp_gk) > 0) {
+    player_gk_stats <- bind_rows(player_gk_stats, temp_gk)
+  }
+  
+  Sys.sleep(5)  # Longer delay between seasons
+  cat("Completed collecting data for", season, "\n")
+}
+
+# Display summary of collected data
+cat("\n==== Data Collection Summary ====\n")
+cat("Standard stats:", nrow(player_standard_stats), "records\n")
+cat("Shooting stats:", nrow(player_shooting_stats), "records\n")
+cat("Passing stats:", nrow(player_passing_stats), "records\n")
+cat("Defensive stats:", nrow(player_defensive_stats), "records\n")
+cat("Possession stats:", nrow(player_possession_stats), "records\n")
+cat("Goalkeeper stats:", nrow(player_gk_stats), "records\n")
+
+# Save raw data to avoid repeated API calls
+save(player_standard_stats, player_shooting_stats, player_passing_stats, 
+     player_defensive_stats, player_possession_stats, player_gk_stats,
+     file = "premier_league_raw_data.RData")
+```
+
