@@ -1540,3 +1540,154 @@ save(player_standard_stats, player_shooting_stats, player_passing_stats,
      file = "premier_league_raw_data.RData")
 ```
 
+```{r}
+# 2. Data Processing and Integration
+# =================================
+
+# 2.1 Examine and standardize data structures
+# Let's look at column names across datasets to ensure consistency
+identify_key_columns <- function() {
+  # Identify key joining columns
+  standard_cols <- colnames(player_standard_stats)[1:10]
+  
+  cat("Standard stats key columns:\n")
+  print(standard_cols)
+  
+  # Check for minutes column naming
+  minutes_cols <- grep("Min|MP", colnames(player_standard_stats), value = TRUE)
+  cat("\nPotential minutes columns:\n")
+  print(minutes_cols)
+}
+
+identify_key_columns()
+```
+
+```{r}
+# 2.2 Create a unified player performance dataset
+create_unified_dataset <- function() {
+  # First standardize minutes column
+  player_standard_stats <- player_standard_stats %>%
+    mutate(
+      # Attempt to standardize minutes played
+      Minutes_Played = case_when(
+        "Min" %in% names(.) ~ Min,
+        "MP_Playing" %in% names(.) ~ MP_Playing * 90,
+        "MP" %in% names(.) ~ MP * 90,
+        TRUE ~ 0
+      )
+    )
+  
+  # Join all datasets
+  unified_data <- player_standard_stats %>%
+    # Join with shooting stats
+    left_join(
+      player_shooting_stats %>%
+        select(Player, Squad, Season_End_Year, contains("Sh"), contains("Gls"), contains("xG")),
+      by = c("Player", "Squad", "Season_End_Year")
+    ) %>%
+    # Join with passing stats
+    left_join(
+      player_passing_stats %>%
+        select(Player, Squad, Season_End_Year, contains("Cmp"), contains("Att"), contains("xA"), KP),
+      by = c("Player", "Squad", "Season_End_Year")
+    ) %>%
+    # Join with defensive stats
+    left_join(
+      player_defensive_stats %>%
+        select(Player, Squad, Season_End_Year, Tkl, Int, Blocks, Clr),
+      by = c("Player", "Squad", "Season_End_Year")
+    ) %>%
+    # Join with possession stats
+    left_join(
+      player_possession_stats %>%
+        select(Player, Squad, Season_End_Year, contains("Touches"), contains("Carries"), contains("Succ")),
+      by = c("Player", "Squad", "Season_End_Year")
+    )
+  
+  # Add goalkeeper stats separately (as they have different metrics)
+  gk_data <- player_gk_stats %>%
+    select(Player, Squad, Season_End_Year, contains("Save"), contains("GA"), contains("PSxG"))
+  
+  unified_data <- unified_data %>%
+    left_join(gk_data, by = c("Player", "Squad", "Season_End_Year"))
+  
+  return(unified_data)
+}
+
+# Create the unified dataset
+player_data <- create_unified_dataset()
+
+# 2.3 Feature engineering for player performance analysis
+player_data <- player_data %>%
+  mutate(
+    # Create position groupings
+    Position_Group = case_when(
+      grepl("FW", Pos) ~ "Forward",
+      grepl("MF", Pos) ~ "Midfielder",
+      grepl("DF", Pos) ~ "Defender",
+      grepl("GK", Pos) ~ "Goalkeeper",
+      TRUE ~ "Other"
+    ),
+    
+    # Create per-90 metrics
+    Minutes_90 = Minutes_Played / 90,
+    
+    # Offensive metrics per 90
+    Goals_90 = ifelse(Minutes_90 > 0, Gls / Minutes_90, 0),
+    Assists_90 = ifelse(Minutes_90 > 0, Ast / Minutes_90, 0),
+    Goal_Contributions_90 = Goals_90 + Assists_90,
+    
+    # Shooting efficiency
+    Shot_Conversion = ifelse(Sh > 0, Gls / Sh * 100, 0),
+    Shots_On_Target_Pct = ifelse(Sh > 0, SoT / Sh * 100, 0),
+    
+    # Expected goals differential
+    xG_Differential = ifelse(!is.na(xG), Gls - xG, NA),
+    
+    # Passing efficiency
+    Pass_Completion = ifelse(!is.na(Cmp_percent), Cmp_percent, NA),
+    
+    # Defensive metrics per 90
+    Tackles_90 = ifelse(Minutes_90 > 0, Tkl / Minutes_90, 0),
+    Interceptions_90 = ifelse(Minutes_90 > 0, Int / Minutes_90, 0),
+    
+    # Talent development metric (for young players)
+    Young_Talent = ifelse(Age <= 23, 
+                           (Goal_Contributions_90 * 3 + Minutes_Played/900), 0),
+    
+    # Experience value (for veterans)
+    Veteran_Value = ifelse(Age >= 30, 
+                            (Goal_Contributions_90 * 2 + Minutes_Played/1800), 0)
+  )
+
+# 2.4 Create synthetic market value (since we can't easily get real transfer values)
+player_data <- player_data %>%
+  mutate(
+    # Base value depends on position and key stats
+    Base_Value_Million = case_when(
+      Position_Group == "Forward" ~ 2 + (0.8 * Gls + 0.4 * Ast) * (1 + Minutes_Played/3000),
+      Position_Group == "Midfielder" ~ 1.5 + (0.5 * Gls + 0.7 * Ast) * (1 + Minutes_Played/3000),
+      Position_Group == "Defender" ~ 1 + (1.5 * (Tkl + Int)/30 + 0.3 * Gls + 0.3 * Ast) * (1 + Minutes_Played/3000),
+      Position_Group == "Goalkeeper" ~ 0.8 + (Save_percent / 100 * 3) * (1 + Minutes_Played/3000),
+      TRUE ~ 0.5
+    ),
+    
+    # Age factor - peak value at age 26-27
+    Age_Factor = case_when(
+      Age < 23 ~ 1.2 + (23 - Age) * 0.05, # Youth premium
+      Age >= 23 & Age <= 27 ~ 1.3,        # Prime years premium
+      Age > 27 ~ 1.3 - (Age - 27) * 0.1   # Declining value with age
+    ),
+    
+    # Calculate final market value with some randomness
+    Market_Value_Million = pmax(0.5, Base_Value_Million * Age_Factor * 
+                                (1 + rnorm(n(), mean = 0, sd = 0.2)))
+  )
+
+# Filter to players with reasonable minutes
+player_data_filtered <- player_data %>%
+  filter(Minutes_Played >= 450) # At least 5 full matches
+
+# Save processed data
+save(player_data, player_data_filtered, file = "premier_league_processed_data.RData")
+```
