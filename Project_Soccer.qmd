@@ -161,8 +161,12 @@ To address the missing minutes data, I revisited the raw files and implemented a
 ## Data Collection from Reddit
 
 ```{r}
-# Load necessary packages
 library(RedditExtractoR)
+library(tidytext)
+library(ggplot2)
+library(wordcloud)
+library(RColorBrewer)
+library(ggrepel)
 
 # Function to safely execute Reddit API calls with rate limiting
 safe_reddit_call <- function(func, ..., delay = 5, max_attempts = 3) {
@@ -237,6 +241,48 @@ if (!is.null(premier_league_threads)) {
 cat("Reddit Data Overview:\n")
 cat("Premier League subreddits found:", nrow(premier_league_subreddits), "\n")
 cat("Premier League threads collected:", nrow(premier_league_threads), "\n")
+```
+
+```{r}
+# Extract comments from selected threads
+if (!is.null(premier_league_threads) && nrow(premier_league_threads) > 0) {
+  # Select a subset of threads to analyze (top 3 by comment count to avoid rate limiting)
+  top_threads <- premier_league_threads %>%
+    arrange(desc(comments)) %>%
+    head(3)
+  
+  cat("\nExtracting comments from top", nrow(top_threads), "threads...\n")
+  
+  # Initialize empty data frame for thread content
+  thread_content <- list(comments = data.frame())
+  
+  # Process each thread URL with rate limiting
+  for (i in 1:nrow(top_threads)) {
+    url <- top_threads$url[i]
+    cat("Processing thread", i, "of", nrow(top_threads), ":", substr(top_threads$title[i], 1, 50), "...\n")
+    
+    # Use safe_reddit_call to get thread content with error handling
+    content <- safe_reddit_call(
+      get_thread_content,
+      url = url,
+      # Longer delay for comment extraction as it's more intensive
+      delay = 8
+    )
+    
+    # Combine with previous results if content was retrieved
+    if (!is.null(content) && !is.null(content$comments) && nrow(content$comments) > 0) {
+      thread_content$comments <- rbind(thread_content$comments, content$comments)
+    }
+    
+    # Add extra delay between thread processing
+    Sys.sleep(5)
+  }
+  
+  cat("\nExtracted", nrow(thread_content$comments), "comments in total.\n")
+} else {
+  cat("\nNo Premier League threads available for comment extraction.\n")
+  thread_content <- list(comments = data.frame())
+}
 ```
 
 ```{r}
@@ -643,7 +689,280 @@ model_outputs <- list(
 save(model_outputs, file = "premier_league_model_results.RData")
 cat("Analysis complete! Model results saved to 'premier_league_model_results.RData'")
 ```
+
+
+
+
 ```{r}
+# 4: Machine Learning for Transfer Market Analysis
+# ===============================================
+
+library(tidymodels)
+library(vip)
+library(ranger)
+library(ggplot2)
+library(corrr)
+library(plotly)
+library(forcats)
+
+# 4.1: Data Preparation for Transfer Analysis
+# -----------------------------------------
+
+# First, let's add estimated market value as a target variable
+# We'll simulate it based on player performance metrics
+# In a real analysis, you would use actual transfer fee data
+
+set.seed(123) # For reproducibility
+
+# Create a comprehensive player dataset
+player_analysis <- player_standard_stats %>%
+  # Join with shooting stats
+  left_join(
+    player_shooting_stats %>%
+      select(Player, Squad, Season_End_Year, Sh, SoT, Sh_per_90, contains("xG")),
+    by = c("Player", "Squad", "Season_End_Year")
+  ) %>%
+  # Join with passing stats
+  left_join(
+    player_passing_stats %>%
+      select(Player, Squad, Season_End_Year, Cmp_percent, KP, contains("xA")),
+    by = c("Player", "Squad", "Season_End_Year")
+  ) %>%
+  # Join with defensive stats
+  left_join(
+    player_defensive_stats %>%
+      select(Player, Squad, Season_End_Year, Tkl, Int, Clr),
+    by = c("Player", "Squad", "Season_End_Year")
+  ) %>%
+  # Join with possession stats
+  left_join(
+    player_possession_stats %>%
+      select(Player, Squad, Season_End_Year, contains("Touches"), contains("Carries"), contains("Prog")),
+    by = c("Player", "Squad", "Season_End_Year")
+  )
+
+# Add position grouping and minutes calculation
+player_analysis <- player_analysis %>%
+  mutate(
+    # Position grouping
+    Position_Group = case_when(
+      grepl("FW", Pos) ~ "Forward",
+      grepl("MF", Pos) ~ "Midfielder",
+      grepl("DF", Pos) ~ "Defender",
+      grepl("GK", Pos) ~ "Goalkeeper",
+      TRUE ~ "Other"
+    ),
+    
+    # Minutes calculation
+    Minutes = 90 * MP_Playing,
+    
+    # Age group for analyzing value trends
+    Age_Group = case_when(
+      Age < 21 ~ "Under 21",
+      Age >= 21 & Age <= 23 ~ "21-23",
+      Age >= 24 & Age <= 27 ~ "24-27",
+      Age >= 28 & Age <= 30 ~ "28-30",
+      Age > 30 ~ "Over 30"
+    ),
+    
+    # Create synthetic market value based on player metrics
+    # This formula simulates how the market might value different attributes
+    Market_Value_Million = case_when(
+      Position_Group == "Forward" ~ (0.8 * Gls + 0.3 * Ast + 0.1 * Age - 0.15 * pmax(Age - 28, 0)^2) * (1 + 0.2 * (MP_Playing/38)),
+      Position_Group == "Midfielder" ~ (0.4 * Gls + 0.6 * Ast + 0.1 * KP + 0.1 * Age - 0.15 * pmax(Age - 28, 0)^2) * (1 + 0.2 * (MP_Playing/38)),
+      Position_Group == "Defender" ~ (0.2 * (Tkl + Int + Clr)/10 + 0.3 * Ast + 0.4 * Gls + 0.1 * Age - 0.15 * pmax(Age - 28, 0)^2) * (1 + 0.2 * (MP_Playing/38)),
+      Position_Group == "Goalkeeper" ~ (0.2 * (Saves/20) + 0.1 * Age - 0.15 * pmax(Age - 28, 0)^2) * (1 + 0.2 * (MP_Playing/38)),
+      TRUE ~ 1.0
+    ),
+    
+    # Add some realistic variance
+    Market_Value_Million = pmax(0.5, Market_Value_Million * (1 + rnorm(n(), mean = 0, sd = 0.2)))
+  )
+
+# Filter out players with very limited playing time
+player_analysis <- player_analysis %>%
+  filter(Minutes >= 450) # At least 5 games
+
+# 4.2: Exploratory Visualizations for Transfer Analysis
+# --------------------------------------------------
+
+# 1. Market Value Distribution by Position
+market_by_position <- player_analysis %>%
+  group_by(Position_Group) %>%
+  summarize(
+    Avg_Value = mean(Market_Value_Million, na.rm = TRUE),
+    Med_Value = median(Market_Value_Million, na.rm = TRUE),
+    Max_Value = max(Market_Value_Million, na.rm = TRUE),
+    Min_Value = min(Market_Value_Million, na.rm = TRUE),
+    StdDev = sd(Market_Value_Million, na.rm = TRUE),
+    Count = n()
+  ) %>%
+  arrange(desc(Avg_Value))
+
+# Plot position value comparison
+p1 <- ggplot(player_analysis, aes(x = Position_Group, y = Market_Value_Million, fill = Position_Group)) +
+  geom_boxplot(alpha = 0.7) +
+  geom_jitter(width = 0.2, alpha = 0.3) +
+  theme_minimal() +
+  labs(title = "Market Value Distribution by Position",
+       x = "Position",
+       y = "Estimated Value (€ Million)",
+       fill = "Position") +
+  theme(legend.position = "none")
+
+print(p1)
+
+# 2. Age-Value Relationship
+p2 <- ggplot(player_analysis, aes(x = Age, y = Market_Value_Million, color = Position_Group)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ Position_Group) +
+  theme_minimal() +
+  labs(title = "Age vs. Market Value by Position",
+       x = "Age",
+       y = "Estimated Value (€ Million)",
+       color = "Position")
+
+print(p2)
+
+# 3. Top Valued Players
+top_players <- player_analysis %>%
+  group_by(Player) %>%
+  filter(Season_End_Year == max(Season_End_Year)) %>% # Most recent season
+  ungroup() %>%
+  arrange(desc(Market_Value_Million)) %>%
+  head(15)
+
+p3 <- ggplot(top_players, aes(x = reorder(Player, Market_Value_Million), y = Market_Value_Million)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top 15 Most Valuable Players",
+       x = "Player",
+       y = "Estimated Value (€ Million)")
+
+print(p3)
+
+# 4. Value vs. Goals+Assists
+p4 <- ggplot(player_analysis, aes(x = Gls + Ast, y = Market_Value_Million, color = Position_Group)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  labs(title = "Goal Contributions vs. Market Value",
+       x = "Goals + Assists",
+       y = "Estimated Value (€ Million)",
+       color = "Position")
+
+print(p4)
+
+# 4.3: Machine Learning Model for Value Prediction
+# ----------------------------------------------
+
+# Split data into training and testing
+set.seed(456)
+player_split <- initial_split(player_analysis, prop = 0.75)
+player_train <- training(player_split)
+player_test <- testing(player_split)
+
+# Create recipe for preprocessing
+value_recipe <- recipe(Market_Value_Million ~ ., data = player_train) %>%
+  # Remove identification variables and URL
+  step_rm(Player, Squad, URL) %>%
+  # Convert categorical variables to factors
+  step_string2factor(Position_Group, Age_Group, Pos, Comp) %>%
+  # Handle missing values
+  step_impute_knn(all_numeric_predictors()) %>%
+  step_impute_mode(all_nominal_predictors()) %>%
+  # Remove near-zero variance predictors
+  step_nzv(all_predictors()) %>%
+  # Normalize numeric variables
+  step_normalize(all_numeric_predictors()) %>%
+  # Create dummy variables for categorical predictors
+  step_dummy(all_nominal_predictors())
+
+# Random Forest model specification
+rf_spec <- rand_forest(
+  trees = 500,
+  mtry = floor(sqrt(ncol(player_train))),
+  min_n = 5
+) %>%
+  set_engine("ranger", importance = "impurity") %>%
+  set_mode("regression")
+
+# Create workflow
+rf_workflow <- workflow() %>%
+  add_recipe(value_recipe) %>%
+  add_model(rf_spec)
+
+# Fit the model
+cat("\nFitting Random Forest model for transfer value prediction...\n")
+rf_fit <- rf_workflow %>%
+  fit(player_train)
+
+# Make predictions
+predictions <- predict(rf_fit, player_test) %>%
+  bind_cols(player_test %>% select(Player, Position_Group, Age, Market_Value_Million))
+
+# Calculate metrics
+eval_metrics <- metrics(predictions, truth = Market_Value_Million, estimate = .pred)
+
+cat("\nModel Evaluation Metrics:\n")
+print(eval_metrics)
+
+# 4.4: Feature Importance
+# ---------------------
+
+# Extract feature importance
+importance_data <- rf_fit %>%
+  extract_fit_parsnip() %>%
+  vip(num_features = 15)
+
+# Plot feature importance
+p5 <- importance_data %>%
+  ggplot(aes(x = reorder(Variable, Importance), y = Importance)) +
+  geom_col(fill = "darkblue") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Top 15 Features for Predicting Player Market Value",
+       x = "Features",
+       y = "Importance")
+
+print(p5)
+
+# 4.5: Undervalued & Overvalued Players Analysis
+# -------------------------------------------
+
+# Calculate valuation difference
+valuation_analysis <- predictions %>%
+  mutate(
+    Predicted_Value = .pred,
+    Actual_Value = Market_Value_Million,
+    Value_Difference = Predicted_Value - Actual_Value,
+    Value_Difference_Percent = (Value_Difference / Actual_Value) * 100
+  )
+
+# Find undervalued players (players worth more than their stats suggest)
+undervalued_players <- valuation_analysis %>%
+  filter(Value_Difference < -1) %>% # At least €1M undervalued
+  arrange(Value_Difference) %>%
+  head(10)
+
+# Find overvalued players (players worth less than their stats suggest)
+overvalued_players <- valuation_analysis %>%
+  filter(Value_Difference > 1) %>% # At least €1M overvalued
+  arrange(desc(Value_Difference)) %>%
+  head(10)
+
+cat("\nPotentially Undervalued Players (Market values them less than model):\n")
+knitr::kable(
+  undervalued_players %>% 
+    select(Player, Position_Group, Age, Actual_Value, Predicted_Value, Value_Difference),
+  digits = 2,
+  format = "simple"
+)
+
+cat("\nPotentially Overvalued Players (Market values them more than model):\n")
+knitr::kable(
 ```
 ```{r}
 ```
@@ -712,4 +1031,383 @@ cat("Analysis complete! Model results saved to 'premier_league_model_results.RDa
 ```
 
 ```{r}
+library(rvest)
+library(dplyr)
+library(stringr)
+library(tidyr)
+
+# Function to scrape match data from Premier League website
+scrape_pl_matches <- function(season) {
+  base_url <- paste0("https://www.premierleague.com/results?co=1&se=", season)
+  
+  webpage <- read_html(base_url)
+  
+  # Extract match information
+  matches <- webpage %>%
+    html_nodes(".matchFixtureContainer") %>%
+    html_text() %>%
+    str_trim()
+  
+  # Process and structure the data
+  match_data <- tibble(match_info = matches) %>%
+    # Additional processing to extract teams, scores, etc.
+    # This would require specific parsing based on the HTML structure
+    
+  return(match_data)
+}
+
+# Scrape transfer data
+scrape_transfers <- function(season) {
+  base_url <- paste0("https://www.premierleague.com/transfers/summer/", season)
+  
+  webpage <- read_html(base_url)
+  
+  # Extract transfer information
+  # This would require specific parsing based on the HTML structure
+  
+  return(transfer_data)
+}
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+
+# Combine player statistics from different sources
+prepare_player_data <- function(standard_stats, shooting_stats, passing_stats, defensive_stats) {
+  # Join datasets on player ID or name
+  combined_stats <- standard_stats %>%
+    left_join(shooting_stats, by = c("Player", "Team")) %>%
+    left_join(passing_stats, by = c("Player", "Team")) %>%
+    left_join(defensive_stats, by = c("Player", "Team"))
+  
+  # Clean data: handle missing values
+  combined_stats <- combined_stats %>%
+    mutate_all(~ifelse(is.na(.), 0, .))
+  
+  # Feature engineering
+  processed_data <- combined_stats %>%
+    mutate(
+      goals_per_90 = Goals / (Minutes / 90),
+      assists_per_90 = Assists / (Minutes / 90),
+      goal_creating_actions_per_90 = GCA / (Minutes / 90),
+      # Create performance index
+      performance_index = (Goals * 3 + Assists * 2 + GCA * 1) / (Minutes / 90)
+    ) %>%
+    # Filter for players with significant minutes
+    filter(Minutes >= 450)  # At least 5 full matches
+  
+  return(processed_data)
+}
+
+# Process and aggregate team formation data
+process_formations <- function(match_data) {
+  formation_stats <- match_data %>%
+    group_by(Team, Formation) %>%
+    summarize(
+      matches_played = n(),
+      wins = sum(Result == "W"),
+      draws = sum(Result == "D"),
+      losses = sum(Result == "L"),
+      goals_scored = sum(GoalsFor),
+      goals_conceded = sum(GoalsAgainst),
+      win_percentage = wins / matches_played * 100
+    ) %>%
+    ungroup()
+  
+  return(formation_stats)
+}
+```
+
+```{r}
+library(ggplot2)
+library(ggsoccer)  # For soccer pitch visualizations
+library(plotly)
+
+# Visualize player positions and their performance metrics
+visualize_positions <- function(player_data) {
+  # Create a pitch visualization with player positions
+  pitch_plot <- ggplot() +
+    annotate_pitch() +
+    theme_pitch() +
+    geom_point(data = player_data, 
+               aes(x = position_x, y = position_y, color = performance_index, 
+                   size = minutes_played, text = player_name),
+               alpha = 0.7) +
+    scale_color_gradient(low = "blue", high = "red") +
+    labs(title = "Player Positions and Performance",
+         subtitle = "Size indicates minutes played, color indicates performance index",
+         color = "Performance Index",
+         size = "Minutes Played") +
+    theme(legend.position = "bottom")
+  
+  # Convert to interactive plot
+  interactive_plot <- ggplotly(pitch_plot, tooltip = "text")
+  
+  return(interactive_plot)
+}
+
+# Visualize team formations
+visualize_formations <- function(formation_data) {
+  formation_plot <- formation_data %>%
+    group_by(Formation) %>%
+    summarize(
+      total_matches = sum(matches_played),
+      average_win_percentage = weighted.mean(win_percentage, matches_played)
+    ) %>%
+    ggplot(aes(x = reorder(Formation, average_win_percentage), 
+               y = average_win_percentage, 
+               fill = total_matches)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    scale_fill_gradient(low = "lightblue", high = "darkblue") +
+    labs(title = "Effectiveness of Different Formations",
+         subtitle = "Average win percentage by formation",
+         x = "Formation",
+         y = "Win Percentage (%)",
+         fill = "Total Matches") +
+    theme_minimal()
+  
+  return(formation_plot)
+}
+```
+
+```{r}
+# Visualize transfer market trends
+visualize_transfers <- function(transfer_data) {
+  # Transfer fees by position
+  position_plot <- transfer_data %>%
+    group_by(Position) %>%
+    summarize(
+      avg_fee = mean(Fee, na.rm = TRUE),
+      total_fee = sum(Fee, na.rm = TRUE),
+      count = n()
+    ) %>%
+    ggplot(aes(x = reorder(Position, avg_fee), y = avg_fee, size = count, color = total_fee)) +
+    geom_point() +
+    scale_color_gradient(low = "green", high = "red") +
+    coord_flip() +
+    labs(title = "Transfer Market Analysis by Position",
+         subtitle = "Average transfer fee by position",
+         x = "Position",
+         y = "Average Transfer Fee (£ millions)",
+         size = "Number of Transfers",
+         color = "Total Spent (£ millions)") +
+    theme_minimal()
+  
+  # Transfer network between teams
+  network_plot <- ggplot(transfer_data, aes(x = Selling_Club, y = Buying_Club)) +
+    geom_point(aes(size = Fee, color = Fee)) +
+    scale_size_continuous(range = c(1, 10)) +
+    scale_color_gradient(low = "blue", high = "red") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+    labs(title = "Transfer Network Between Clubs",
+         x = "Selling Club",
+         y = "Buying Club",
+         size = "Transfer Fee",
+         color = "Transfer Fee (£ millions)")
+  
+  return(list(position_plot = position_plot, network_plot = network_plot))
+}
+```
+
+```{r}
+library(tidymodels)
+library(caret)
+library(ranger)  # For random forests
+library(glmnet)  # For ridge/lasso regression
+
+# Split data into training and testing sets
+prepare_ml_data <- function(player_data, target_variable = "performance_index") {
+  # Create the target variable if it's a formula
+  if (!target_variable %in% colnames(player_data)) {
+    # This is just an example, modify based on your specific needs
+    player_data <- player_data %>%
+      mutate(performance_index = (Goals * 3 + Assists * 2 + Shots / 2) / (Minutes / 90))
+  }
+  
+  # Select relevant features
+  model_data <- player_data %>%
+    select(Minutes, Goals, Assists, Shots, SoT, Passes, KeyPasses, Tackles, 
+           Interceptions, Position, Age, performance_index)
+  
+  # Split data
+  set.seed(123)
+  split <- initial_split(model_data, prop = 0.75)
+  train_data <- training(split)
+  test_data <- testing(split)
+  
+  return(list(train = train_data, test = test_data, full = model_data))
+}
+
+# Train multiple models and compare performance
+train_models <- function(train_data, test_data, target = "performance_index") {
+  # Create formula
+  formula_str <- paste(target, "~ .")
+  formula_obj <- as.formula(formula_str)
+  
+  # Set up cross-validation
+  train_control <- trainControl(
+    method = "cv", 
+    number = 5, 
+    verboseIter = TRUE
+  )
+  
+  # 1. Linear Regression
+  linear_model <- train(
+    formula_obj,
+    data = train_data,
+    method = "lm",
+    trControl = train_control
+  )
+  
+  # 2. Ridge Regression
+  ridge_model <- train(
+    formula_obj,
+    data = train_data,
+    method = "glmnet",
+    tuneGrid = expand.grid(alpha = 0, lambda = seq(0.001, 1, length = 20)),
+    trControl = train_control
+  )
+  
+  # 3. Lasso Regression
+  lasso_model <- train(
+    formula_obj,
+    data = train_data,
+    method = "glmnet",
+    tuneGrid = expand.grid(alpha = 1, lambda = seq(0.001, 1, length = 20)),
+    trControl = train_control
+  )
+  
+  # 4. Random Forest
+  rf_model <- train(
+    formula_obj,
+    data = train_data,
+    method = "ranger",
+    trControl = train_control,
+    tuneLength = 5,
+    importance = 'impurity'
+  )
+  
+  # 5. Gradient Boosting
+  gbm_model <- train(
+    formula_obj,
+    data = train_data,
+    method = "gbm",
+    trControl = train_control,
+    verbose = FALSE
+  )
+  
+  # Make predictions on test data
+  predict_and_evaluate <- function(model, name) {
+    preds <- predict(model, newdata = test_data)
+    rmse <- sqrt(mean((preds - test_data[[target]])^2))
+    r2 <- cor(preds, test_data[[target]])^2
+    return(data.frame(Model = name, RMSE = rmse, R_squared = r2))
+  }
+  
+  # Evaluate all models
+  eval_results <- rbind(
+    predict_and_evaluate(linear_model, "Linear Regression"),
+    predict_and_evaluate(ridge_model, "Ridge Regression"),
+    predict_and_evaluate(lasso_model, "Lasso Regression"),
+    predict_and_evaluate(rf_model, "Random Forest"),
+    predict_and_evaluate(gbm_model, "Gradient Boosting")
+  )
+  
+  models_list <- list(
+    linear = linear_model,
+    ridge = ridge_model,
+    lasso = lasso_model,
+    rf = rf_model,
+    gbm = gbm_model
+  )
+  
+  return(list(models = models_list, evaluation = eval_results))
+}
+
+```
+
+```{r}
+# Create an xG model using R and tidymodels
+build_xg_model <- function(shots_data) {
+  library(tidymodels)
+  
+  # Prepare data
+  shots_data <- shots_data %>%
+    mutate(
+      # Calculate distance from goal
+      distance = sqrt((location_x - 100)^2 + (location_y - 50)^2),
+      # Calculate angle to goal (simplified version)
+      angle = abs(atan2(location_y - 50, 100 - location_x))
+    )
+  
+  # Split the data
+  set.seed(123)
+  shots_split <- initial_split(shots_data, prop = 0.75, strata = is_goal)
+  shots_train <- training(shots_split)
+  shots_test <- testing(shots_split)
+  
+  # Create recipe for preprocessing
+  shots_recipe <- recipe(is_goal ~ distance + angle + header + big_chance + 
+                           from_corner + from_fk + direct_fk, 
+                         data = shots_train) %>%
+    step_normalize(all_predictors())
+  
+  # Create workflow with logistic regression
+  xg_workflow <- workflow() %>%
+    add_recipe(shots_recipe) %>%
+    add_model(logistic_reg())
+  
+  # Fit the model
+  xg_fit <- fit(xg_workflow, data = shots_train)
+  
+  # Evaluate model
+  shots_test_pred <- predict(xg_fit, shots_test, type = "prob") %>%
+    bind_cols(shots_test)
+  
+  # Calculate performance metrics
+  roc_auc <- roc_auc(shots_test_pred, truth = is_goal, .pred_1)
+  
+  # Create visual representation of xG
+  create_xg_heatmap <- function(model) {
+    # Create a grid of locations on the pitch
+    pitch_grid <- expand.grid(
+      location_x = seq(50, 100, by = 0.5),
+      location_y = seq(0, 100, by = 0.5)
+    ) %>%
+      as_tibble() %>%
+      mutate(
+        distance = sqrt((location_x - 100)^2 + (location_y - 50)^2),
+        angle = abs(atan2(location_y - 50, 100 - location_x)),
+        header = 0,
+        big_chance = 0,
+        from_corner = 0,
+        from_fk = 0,
+        direct_fk = 0
+      )
+    
+    # Predict xG for each location
+    pitch_grid_pred <- predict(model, pitch_grid, type = "prob") %>%
+      bind_cols(pitch_grid) %>%
+      rename(xG = .pred_1)
+    
+    # Create heatmap
+    heatmap <- ggplot(pitch_grid_pred, aes(x = location_x, y = location_y, fill = xG)) +
+      geom_tile() +
+      scale_fill_gradient(low = "blue", high = "red") +
+      coord_fixed(ratio = 68/105) +
+      labs(title = "Expected Goals (xG) Model",
+           subtitle = "xG probability by shot location",
+           fill = "xG Probability") +
+      theme_minimal()
+    
+    return(heatmap)
+  }
+  
+  heatmap <- create_xg_heatmap(xg_fit)
+  
+  return(list(model = xg_fit, roc_auc = roc_auc, heatmap = heatmap))
+}
 ```
