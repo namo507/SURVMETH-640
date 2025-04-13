@@ -198,20 +198,450 @@ safe_reddit_call <- function(func, ..., delay = 5, max_attempts = 3) {
 }
 ```
 ```{r}
-# Find relevant Premier League subreddits - limit to just a few
+# 2. Find Subreddits (Existing Code)
 cat("Searching for Premier League subreddits...\n")
 premier_league_subreddits <- safe_reddit_call(
   find_subreddits, 
   keywords = "Premier League", 
   delay = 3
 )
-# Only display the first few results
-if (!is.null(premier_league_subreddits)) {
-  head(premier_league_subreddits)
+
+# 3. Get Thread URLs (Missing Code)
+cat("\nExtracting Premier League threads...\n")
+premier_league_threads <- safe_reddit_call(
+  find_thread_urls,
+  subreddit = "PremierLeague",
+  sort_by = "top",
+  period = "month"
+)
+
+# 4. Data Verification
+if (!is.null(premier_league_threads)) {
+  cat("\nReddit Data Overview:\n")
+  cat("Premier League subreddits found:", 
+      ifelse(is.null(premier_league_subreddits), 0, nrow(premier_league_subreddits)), "\n")
+  cat("Premier League threads collected:", nrow(premier_league_threads), "\n")
+  
+  # Display sample data
+  cat("\nSample Threads:\n")
+  premier_league_threads %>%
+    select(title, url, comments) %>%
+    head(5) %>%
+    knitr::kable()
+} else {
+  cat("\nFailed to retrieve thread data. Check API limits and internet connection.")
 }
 ```
 
 ```{r}
+cat("Reddit Data Overview:\n")
+cat("Premier League subreddits found:", nrow(premier_league_subreddits), "\n")
+cat("Premier League threads collected:", nrow(premier_league_threads), "\n")
+```
+
+```{r}
+# 3.2: Sentiment Analysis of Reddit Comments
+# -----------------------------------------
+
+# Process comment data if available
+if (!is.null(thread_content) && !is.null(thread_content$comments) && nrow(thread_content$comments) > 0) {
+  cat("\nAnalyzing sentiment in", nrow(thread_content$comments), "Reddit comments...\n")
+  
+  # Tokenize comments for text analysis
+  comment_words <- thread_content$comments %>%
+    select(comment, author, upvotes) %>%
+    unnest_tokens(word, comment) %>%
+    anti_join(stop_words, by = "word") %>%
+    filter(!grepl("^[0-9]+$", word)) %>%
+    filter(nchar(word) > 2)
+  
+  # Calculate word frequencies
+  word_frequencies <- comment_words %>%
+    count(word, sort = TRUE) %>%
+    head(50)
+  
+  # Sentiment analysis
+  comment_sentiment <- comment_words %>%
+    inner_join(get_sentiments("bing"), by = "word") %>%
+    count(sentiment) %>%
+    spread(sentiment, n, fill = 0) %>%
+    mutate(
+      total_sentiment_words = positive + negative,
+      sentiment_ratio = positive / total_sentiment_words
+    )
+  
+  # Extract player mentions
+  player_names <- player_standard_stats %>% 
+    pull(Player) %>% 
+    unique()
+  
+  # Function to find player mentions in a text
+  find_player_mentions <- function(text, players) {
+    mentioned_players <- c()
+    for (player in players) {
+      if (grepl(player, text, ignore.case = TRUE)) {
+        mentioned_players <- c(mentioned_players, player)
+      }
+    }
+    return(paste(mentioned_players, collapse = "|"))
+  }
+  
+  # Apply to comments (limit to a sample to avoid long processing time)
+  comment_sample <- thread_content$comments %>%
+    sample_n(min(nrow(thread_content$comments), 500)) %>%
+    mutate(
+      mentioned_players = sapply(comment, function(c) {
+        find_player_mentions(c, player_names)
+      }),
+      has_player_mention = mentioned_players != ""
+    )
+  
+  # Extract player sentiment
+  player_mentions <- comment_sample %>%
+    filter(has_player_mention) %>%
+    separate_rows(mentioned_players, sep = "\\|") %>%
+    filter(mentioned_players != "") %>%
+    group_by(mentioned_players) %>%
+    summarise(
+      mention_count = n(),
+      avg_upvotes = mean(upvotes, na.rm = TRUE)
+    ) %>%
+    arrange(desc(mention_count)) %>%
+    rename(Player = mentioned_players)
+  
+  # Visualizations
+  cat("\nCreating visualizations of Reddit data analysis...\n")
+  
+  # Word cloud of most common terms
+  set.seed(123)
+  p1 <- wordcloud(words = word_frequencies$word, 
+            freq = word_frequencies$n, 
+            max.words = 100, 
+            colors = brewer.pal(8, "Dark2"),
+            random.order = FALSE,
+            main = "Most Common Terms in Reddit Discussions")
+  
+  # Bar chart of most mentioned players
+  p2 <- ggplot(head(player_mentions, 15), aes(x = reorder(Player, mention_count), y = mention_count)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    coord_flip() +
+    theme_minimal() +
+    labs(x = "Player", y = "Number of Mentions", 
+         title = "Most Discussed Players on Reddit")
+}
+```
+
+```{r}
+
+# 3.3: Integrate Reddit Data with Player Statistics
+# -----------------------------------------------
+
+# Join player mentions with performance data
+if (exists("player_mentions") && nrow(player_mentions) > 0) {
+  player_integrated <- player_standard_stats %>%
+    left_join(player_mentions, by = "Player") %>%
+    mutate(
+      mention_count = replace_na(mention_count, 0),
+      avg_upvotes = replace_na(avg_upvotes, 0)
+    )
+  
+  # Create a popularity vs performance metric
+  player_popularity <- player_integrated %>%
+    group_by(Player) %>%
+    summarize(
+      total_mentions = sum(mention_count),
+      avg_upvotes = mean(avg_upvotes, na.rm = TRUE),
+      total_goals = sum(Gls, na.rm = TRUE),
+      total_assists = sum(Ast, na.rm = TRUE),
+      performance_score = total_goals + total_assists,
+      popularity_score = total_mentions * (avg_upvotes + 1)
+    ) %>%
+    filter(total_mentions > 0) %>%
+    arrange(desc(popularity_score))
+  
+  # Visualization of popularity vs performance
+  p3 <- ggplot(head(player_popularity, 25), 
+               aes(x = performance_score, y = popularity_score, label = Player)) +
+    geom_point(aes(size = total_mentions), alpha = 0.7) +
+    geom_text_repel(size = 3) +
+    theme_minimal() +
+    labs(x = "Performance Score (Goals + Assists)", 
+         y = "Popularity Score (Mentions × Upvotes)",
+         title = "Player Performance vs. Reddit Popularity")
+}
+
+# 3.4: Prepare Data for Predictive Modeling
+# --------------------------------------
+
+# Create a comprehensive dataset for modeling
+modeling_data <- player_standard_stats %>%
+  left_join(
+    player_shooting_stats %>% 
+      select(Player, Squad, Season_End_Year, contains("Sh"), contains("Gls"), contains("xG")),
+    by = c("Player", "Squad", "Season_End_Year")
+  ) %>%
+  left_join(
+    player_passing_stats %>% 
+      select(Player, Squad, Season_End_Year, contains("Pass"), contains("Ast"), contains("xA")),
+    by = c("Player", "Squad", "Season_End_Year")
+  ) %>%
+  left_join(
+    player_defensive_stats %>% 
+      select(Player, Squad, Season_End_Year, contains("Tkl"), contains("Int"), contains("Blocks")),
+    by = c("Player", "Squad", "Season_End_Year")
+  )
+
+# Add Reddit popularity metrics if available
+if (exists("player_popularity")) {
+  modeling_data <- modeling_data %>%
+    left_join(
+      player_popularity %>% select(Player, popularity_score, total_mentions),
+      by = "Player"
+    ) %>%
+    mutate(
+      popularity_score = replace_na(popularity_score, 0),
+      total_mentions = replace_na(total_mentions, 0)
+    )
+}
+
+# Feature engineering
+modeling_data <- modeling_data %>%
+  mutate(
+    # Create position categories
+    Position_Group = case_when(
+      grepl("FW", Pos) ~ "Forward",
+      grepl("MF", Pos) ~ "Midfielder",
+      grepl("DF", Pos) ~ "Defender",
+      grepl("GK", Pos) ~ "Goalkeeper",
+      TRUE ~ "Other"
+    ),
+    
+    # Calculate minutes per match
+    Mins_Per_Match = if("Min" %in% names(.)) Min / MP else 0,
+    
+    # Offensive efficiency metrics
+    Goal_Conversion = if("Sh" %in% names(.)) Gls / Sh else NA,
+    Shot_Accuracy = if("SoT" %in% names(.)) SoT / Sh else NA,
+    
+    # Create target variable for high performer classification
+    # Different thresholds by position
+    High_Performer = case_when(
+      Position_Group == "Forward" & Gls >= 10 ~ TRUE,
+      Position_Group == "Midfielder" & (Gls + Ast) >= 10 ~ TRUE,
+      Position_Group == "Defender" & (Gls + Ast) >= 5 ~ TRUE,
+      TRUE ~ FALSE
+    )
+  ) %>%
+  filter(!is.na(Position_Group)) %>% 
+  filter(Position_Group != "Goalkeeper") # Exclude goalkeepers from outfield analysis
+
+# Check for missing values
+missing_values <- colSums(is.na(modeling_data)) / nrow(modeling_data)
+high_missing <- names(missing_values[missing_values > 0.3])
+
+# Remove columns with too many missing values
+modeling_data <- modeling_data %>%
+  select(-all_of(high_missing))
+
+# Split data by seasons
+train_data <- modeling_data %>% filter(Season_End_Year < 2023)
+test_data <- modeling_data %>% filter(Season_End_Year == 2023)
+
+# 3.5: Build Predictive Models
+# -------------------------
+
+# Set up recipe for preprocessing
+model_recipe <- recipe(High_Performer ~ ., data = train_data) %>%
+  # Remove identification variables
+  step_rm(Player, Squad, URL, Comp) %>%
+  # Convert categorical variables to factors
+  step_string2factor(Position_Group, Pos) %>%
+  # Handle missing values
+  step_impute_knn(all_numeric_predictors()) %>%
+  step_impute_mode(all_nominal_predictors()) %>%
+  # Remove near-zero variance predictors
+  step_nzv(all_predictors()) %>%
+  # Normalize numeric variables
+  step_normalize(all_numeric_predictors()) %>%
+  # Create dummy variables for categorical predictors
+  step_dummy(all_nominal_predictors()) %>%
+  # Handle class imbalance
+  step_smote(High_Performer)
+
+# Random Forest model
+rf_spec <- rand_forest(
+  trees = 500,
+  mtry = tune(),
+  min_n = tune()
+) %>%
+  set_engine("ranger", importance = "impurity") %>%
+  set_mode("classification")
+
+# XGBoost model
+xgb_spec <- boost_tree(
+  trees = 500,
+  tree_depth = tune(),
+  min_n = tune(),
+  loss_reduction = tune(),
+  sample_size = tune(),
+  mtry = tune(),
+  learn_rate = tune()
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("classification")
+
+# Set up workflows
+rf_workflow <- workflow() %>%
+  add_recipe(model_recipe) %>%
+  add_model(rf_spec)
+
+xgb_workflow <- workflow() %>%
+  add_recipe(model_recipe) %>%
+  add_model(xgb_spec)
+
+# Set up cross-validation
+set.seed(123)
+cv_folds <- vfold_cv(train_data, v = 5, strata = High_Performer)
+
+# Tune hyperparameters (minimal for demonstration)
+rf_grid <- grid_regular(
+  mtry(range = c(5, 15)),
+  min_n(range = c(2, 8)),
+  levels = 3
+)
+
+# Tune Random Forest model
+cat("\nTuning Random Forest model...\n")
+rf_tune_results <- rf_workflow %>%
+  tune_grid(
+    resamples = cv_folds,
+    grid = rf_grid,
+    metrics = metric_set(accuracy, roc_auc, precision, recall)
+  )
+
+# Get best Random Forest model
+best_rf <- rf_tune_results %>% 
+  select_best(metric = "roc_auc")
+
+# Finalize workflow
+final_rf_workflow <- rf_workflow %>%
+  finalize_workflow(best_rf)
+
+# Fit final model
+cat("Fitting final Random Forest model...\n")
+rf_fit <- final_rf_workflow %>%
+  fit(train_data)
+
+# 3.6: Model Evaluation and Interpretation
+# -------------------------------------
+
+# Evaluate on test data
+rf_preds <- predict(rf_fit, test_data) %>%
+  bind_cols(predict(rf_fit, test_data, type = "prob")) %>%
+  bind_cols(test_data %>% select(Player, Position_Group, High_Performer))
+
+# Calculate metrics
+rf_metrics <- rf_preds %>%
+  metrics(truth = High_Performer, estimate = .pred_class,
+          .pred_TRUE)
+
+cat("\nRandom Forest Model Performance:\n")
+print(rf_metrics)
+
+# Extract feature importance
+importance_data <- rf_fit %>%
+  extract_fit_parsnip() %>%
+  vip(num_features = 15)
+
+# Plot feature importance
+p4 <- importance_data %>%
+  ggplot(aes(x = reorder(Variable, Importance), y = Importance)) +
+  geom_col(fill = "darkblue") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = "Features", y = "Importance", 
+       title = "Top 15 Features for Predicting High-Performing Players")
+
+# 3.7: Player Recommendations and Predictions
+# ----------------------------------------
+
+# Identify undervalued players
+undervalued_players <- rf_preds %>%
+  filter(.pred_TRUE > 0.7 & High_Performer == FALSE) %>%
+  arrange(desc(.pred_TRUE)) %>%
+  left_join(
+    modeling_data %>% select(Player, Squad, Position_Group, Gls, Ast, Age),
+    by = c("Player", "Position_Group")
+  ) %>%
+  distinct(Player, .keep_all = TRUE) %>%
+  select(Player, Squad, Position_Group, Gls, Ast, Age, .pred_TRUE) %>%
+  rename(
+    Prediction_Score = .pred_TRUE
+  )
+
+# Identify young talents
+young_talents <- modeling_data %>%
+  filter(Age <= 23) %>%
+  select(Player, Squad, Age, Position_Group) %>%
+  distinct(Player, .keep_all = TRUE) %>%
+  inner_join(
+    rf_preds %>% 
+      select(Player, .pred_TRUE) %>%
+      filter(.pred_TRUE > 0.6),
+    by = "Player"
+  ) %>%
+  arrange(desc(.pred_TRUE)) %>%
+  rename(
+    Prediction_Score = .pred_TRUE
+  )
+
+# Display recommendations
+cat("\nPotentially Undervalued Players (High prediction score but not yet high performers):\n")
+knitr::kable(head(undervalued_players, 10), format = "simple")
+
+cat("\nPromising Young Talents (23 or younger with high potential):\n")
+knitr::kable(head(young_talents, 10), format = "simple")
+
+# 3.8: Position-Specific Analysis
+# ----------------------------
+
+# Analyze different metrics by position
+position_analysis <- modeling_data %>%
+  group_by(Position_Group) %>%
+  summarize(
+    Player_Count = n_distinct(Player),
+    Avg_Age = mean(Age, na.rm = TRUE),
+    Avg_Goals = mean(Gls, na.rm = TRUE),
+    Avg_Assists = mean(Ast, na.rm = TRUE),
+    Shots_Per_Goal = mean(Sh / Gls, na.rm = TRUE),
+    High_Performer_Rate = mean(High_Performer, na.rm = TRUE)
+  )
+
+# Display position analysis
+cat("\nPosition-Specific Performance Analysis:\n")
+knitr::kable(position_analysis, format = "simple", digits = 2)
+
+# Position-specific visualizations
+p5 <- ggplot(modeling_data, aes(x = Age, y = Gls, color = Position_Group)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", se = FALSE) +
+  facet_wrap(~ Position_Group) +
+  theme_minimal() +
+  labs(x = "Age", y = "Goals Scored", 
+       title = "Goals Scored by Age Across Different Positions")
+
+# Save visualizations and models
+cat("\nSaving visualization and model objects...\n")
+model_outputs <- list(
+  rf_model = rf_fit,
+  model_metrics = rf_metrics,
+  feature_importance = importance_data,
+  undervalued_players = undervalued_players,
+  young_talents = young_talents
+)
+
+save(model_outputs, file = "premier_league_model_results.RData")
+cat("Analysis complete! Model results saved to 'premier_league_model_results.RData'")
 ```
 ```{r}
 ```
