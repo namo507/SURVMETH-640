@@ -153,6 +153,11 @@ To address the missing minutes data, I revisited the raw files and implemented a
 
 
 
+
+
+
+
+
 ## Data Collection from Reddit
 
 ```{r}
@@ -204,110 +209,77 @@ premier_league_subreddits <- safe_reddit_call(
 if (!is.null(premier_league_subreddits)) {
   head(premier_league_subreddits)
 }
-
-# Extract threads from r/PremierLeague subreddit - limit number of results
-cat("Extracting threads from r/PremierLeague...\n")
-premier_league_threads <- safe_reddit_call(
-  find_thread_urls,
-  subreddit = "PremierLeague", 
-  sort_by = "top", 
-  period = "year",
-  delay = 5
-)
-
-# Manually limit the results to reduce API load
-if (!is.null(premier_league_threads) && nrow(premier_league_threads) > 0) {
-  # Keep only the first 20 threads (approximately 2 pages worth)
-  premier_league_threads <- head(premier_league_threads, 20)
-}
-
-# Retrieve content about player performance - with more specific search terms and limits
-cat("Searching for player performance threads...\n")
-player_performance_urls <- safe_reddit_call(
-  find_thread_urls,
-  keywords = "player performance Premier League", 
-  sort_by = "relevance",
-  delay = 5
-)
-
-# Manually limit the results
-if (!is.null(player_performance_urls) && nrow(player_performance_urls) > 0) {
-  # Keep only the first 10 threads (approximately 1 page worth)
-  player_performance_urls <- head(player_performance_urls, 10)
-}
-
-```{r}
-# Extract comments from a limited number of threads
-# If player_performance_urls is null or has fewer than 5 urls, handle gracefully
-thread_urls <- if (!is.null(player_performance_urls) && nrow(player_performance_urls) > 0) {
-  player_performance_urls$url[1:min(3, nrow(player_performance_urls))] # Reduced from 5 to 3
-} else {
-  character(0)
-}
-
-thread_content <- list(comments = data.frame())
-if (length(thread_urls) > 0) {
-  cat("Extracting comments from", length(thread_urls), "threads...\n")
-  cat("This might take some time with built-in delays to avoid rate limits...\n")
-  
-  for (url in thread_urls) {
-    cat("Processing URL:", url, "\n")
-    content <- safe_reddit_call(
-      get_thread_content,
-      url = url,
-      # Longer delay for comment extraction as it's more intensive
-      delay = 8
-    )
-    
-    # Combine with previous results if content was retrieved
-    if (!is.null(content) && !is.null(content$comments) && nrow(content$comments) > 0) {
-      thread_content$comments <- rbind(thread_content$comments, content$comments)
-    }
-  }
-}
 ```
 
 ```{r}
-# 3: Machine Learning Analysis and Prediction
-# ==========================================
+```
+```{r}
+```
+```{r}
+```
 
-library(tidymodels)
-library(textrecipes)
-library(tidytext)
-library(vip)
-library(ranger)
-library(xgboost)
-library(themis)  # For handling class imbalance
+```{r}
+```
 
-# 3.1: Prepare the data for modeling
-# ----------------------------------
+```{r}
+```
 
-# First, examine the Reddit comments to understand sentiment about players
-cat("Analyzing Reddit sentiment on player performance...\n")
+```{r}
+```
 
-# Enhanced feature engineering
-final_data <- player_data %>%
-  mutate(
-    # Position-specific normalization
-    Goals_p90 = ifelse(Position %in% c("FW", "MF"), Goals/(Minutes/90), NA),
-    Tackles_p90 = ifelse(Position %in% c("DF", "MF"), Tackles/(Minutes/90), NA),
-    
-    # Momentum features
-    Form_Last5 = (lag(Goals) + lag(Goals,2) + lag(Goals,3))/3,
-    Injury_Impact = ifelse(grepl("injury", Reddit_Comments), 1, 0),
-    
-    # Opposition strength adjustment
-    Opp_Strength = (Opponent_Rank + 1)/20  # Scale 1-20 to 0.05-1
-  ) %>%
-  group_by(Player) %>%
-  mutate(
-    # Career trajectory features
-    Career_Goals = cumsum(Goals),
-    Improvement_Rate = (Goals - lag(Goals))/lag(Minutes)*90
-  ) %>%
-  ungroup() %>%
-  # Handle missing data using position averages
-  group_by(Position) %>%
-  mutate(across(c(Goals_p90, Tackles_p90), ~ifelse(is.na(.), mean(., na.rm=TRUE), .))) %>%
-  ungroup()
+```{r}
+```
+
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
 ```
