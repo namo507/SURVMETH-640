@@ -34,32 +34,77 @@ extract_season_data <- function(season_year) {
   Sys.sleep(2)
   
   # Read and parse the webpage
-  page <- read_html(base_url)
+  page <- tryCatch({
+    read_html(base_url)
+  }, error = function(e) {
+    message("Error reading URL: ", base_url, " - ", e$message)
+    return(NULL)
+  })
+  
+  if(is.null(page)) return(NULL)
   
   # Extract table data
-  table_data <- page %>%
-    html_nodes("table.items") %>%
-    html_table() %>%
-    .[[1]]
+  table_data <- tryCatch({
+    tables <- page %>% html_nodes("table.items") %>% html_table()
+    if(length(tables) > 0) tables[[1]] else NULL
+  }, error = function(e) {
+    message("Error extracting table: ", e$message)
+    return(NULL)
+  })
   
-  # Clean column names and data
-  names(table_data) <- c("position", "club", "matches", "wins", "draws", "losses", 
-                         "goals_for", "goals_against", "goal_difference", "points")
+  if(is.null(table_data)) return(NULL)
   
-  # Remove unnecessary rows and columns
-  table_data <- table_data %>%
-    filter(!is.na(position) & position != "") %>%
-    select(position, club, points)
+  # Print column names to debug
+  print(paste("Original columns:", paste(names(table_data), collapse=", ")))
+  
+  # Clean column names and data - adjust the column names based on the actual structure
+  if(ncol(table_data) >= 10) {
+    names(table_data)[1:10] <- c("position", "club", "matches", "wins", "draws", "losses", 
+                                 "goals_for", "goals_against", "goal_difference", "points")
+    
+    # Clean the club names (remove rank numbers if they exist)
+    table_data$club <- gsub("^\\d+\\s", "", table_data$club)
+    
+    # Remove unnecessary rows and columns
+    table_data <- table_data %>%
+      filter(!is.na(position) & position != "") %>%
+      select(position, club, points)
+  } else {
+    message("Table structure is unexpected. Number of columns: ", ncol(table_data))
+    print(head(table_data))
+    return(NULL)
+  }
   
   # Extract transfer expenditure from separate page
   transfer_url <- paste0("https://www.transfermarkt.co.uk/premier-league/transfers/wettbewerb/GB1/plus/?saison_id=", season_year)
-  transfer_page <- read_html(transfer_url)
+  
+  transfer_page <- tryCatch({
+    read_html(transfer_url)
+  }, error = function(e) {
+    message("Error reading transfer URL: ", transfer_url, " - ", e$message)
+    return(NULL)
+  })
+  
+  if(is.null(transfer_page)) {
+    # If we can't get transfer data, return just the table data with zero expenditure
+    return(table_data %>% 
+             mutate(
+               expenditure_m = 0,
+               season = paste0(season_year, "/", substr(season_year + 1, 3, 4))
+             )
+    )
+  }
   
   # Extract club expenditure data
-  transfer_data <- transfer_page %>%
-    html_nodes(".large-8 .box") %>%
-    html_nodes("table") %>%
-    html_table()
+  transfer_data <- tryCatch({
+    transfer_page %>%
+      html_nodes(".large-8 .box") %>%
+      html_nodes("table") %>%
+      html_table()
+  }, error = function(e) {
+    message("Error extracting transfer tables: ", e$message)
+    return(list())
+  })
   
   # Process transfer data to extract expenditure
   expenditure_data <- data.frame(
@@ -70,37 +115,82 @@ extract_season_data <- function(season_year) {
   
   for(i in seq_along(transfer_data)) {
     if(i %% 2 == 1) { # Club transfer tables are at odd indices
-      club_name <- transfer_page %>%
-        html_nodes(".large-8 .box h2") %>%
-        .[ceiling(i/2)] %>%
-        html_text() %>%
-        trimws()
+      club_name <- tryCatch({
+        club_nodes <- transfer_page %>% html_nodes(".large-8 .box h2")
+        if(length(club_nodes) >= ceiling(i/2)) {
+          club_nodes[ceiling(i/2)] %>% html_text() %>% trimws()
+        } else {
+          paste("Unknown Club", i)
+        }
+      }, error = function(e) {
+        message("Error extracting club name: ", e$message)
+        return(paste("Unknown Club", i))
+      })
       
       if(length(transfer_data[[i]]) > 0) {
         # Get expenditure from last row, last column
         exp_col <- ncol(transfer_data[[i]])
         exp_row <- nrow(transfer_data[[i]])
-        exp_text <- transfer_data[[i]][exp_row, exp_col]
         
-        # Parse the expenditure value (e.g., "€10.50m" to 10.5)
-        exp_value <- gsub("[^0-9.]", "", exp_text)
-        if(exp_value != "") {
-          exp_value <- as.numeric(exp_value)
-          if(grepl("m", exp_text)) {
-            exp_value <- exp_value # Already in millions
-          } else if(grepl("k", exp_text)) {
-            exp_value <- exp_value / 1000 # Convert thousands to millions
+        # Check if there are actually rows and columns
+        if(exp_row > 0 && exp_col > 0) {
+          exp_text <- as.character(transfer_data[[i]][exp_row, exp_col])
+          
+          # Parse the expenditure value (e.g., "€10.50m" to 10.5)
+          exp_value <- gsub("[^0-9.]", "", exp_text)
+          if(exp_value != "") {
+            exp_value <- as.numeric(exp_value)
+            if(grepl("m", exp_text)) {
+              exp_value <- exp_value # Already in millions
+            } else if(grepl("k", exp_text)) {
+              exp_value <- exp_value / 1000 # Convert thousands to millions
+            }
+          } else {
+            exp_value <- 0
           }
-        } else {
-          exp_value <- 0
+          
+          # Add to expenditure data
+          expenditure_data <- rbind(expenditure_data, 
+                                   data.frame(club = club_name, 
+                                             expenditure_m = exp_value,
+                                             stringsAsFactors = FALSE))
         }
-        
-        # Add to expenditure data
-        expenditure_data <- rbind(expenditure_data, 
-                                 data.frame(club = club_name, 
-                                           expenditure_m = exp_value,
-                                           stringsAsFactors = FALSE))
       }
+    }
+  }
+  
+  # Print debug info about the clubs found
+  if(nrow(expenditure_data) > 0) {
+    print(paste("Extracted expenditure data for", nrow(expenditure_data), "clubs"))
+    print(paste("Clubs found:", paste(expenditure_data$club, collapse=", ")))
+  } else {
+    print("No expenditure data extracted")
+  }
+  
+  # Standardize club names between the two datasets
+  # This could be improved with a more robust name matching approach
+  if(nrow(expenditure_data) > 0) {
+    # Print both club name lists to see differences
+    print("League table clubs:")
+    print(table_data$club)
+    print("Transfer page clubs:")
+    print(expenditure_data$club)
+    
+    # Clean club names to improve matching
+    expenditure_data$club <- gsub(" FC", "", expenditure_data$club)
+    table_data$club <- gsub(" FC", "", table_data$club)
+    
+    # Create a mapping table for club names that might differ between the two sources
+    club_mapping <- data.frame(
+      transfermarkt_name = c("Manchester United", "Manchester City", "Arsenal FC"),
+      table_name = c("Man Utd", "Man City", "Arsenal"),
+      stringsAsFactors = FALSE
+    )
+    
+    # Apply mapping if needed
+    for(i in 1:nrow(club_mapping)) {
+      expenditure_data$club[expenditure_data$club == club_mapping$transfermarkt_name[i]] <- 
+        club_mapping$table_name[i]
     }
   }
   
@@ -109,9 +199,16 @@ extract_season_data <- function(season_year) {
     left_join(expenditure_data, by = "club") %>%
     mutate(
       position = as.numeric(position),
+      points = as.numeric(points),
       season = paste0(season_year, "/", substr(season_year + 1, 3, 4)),
       expenditure_m = ifelse(is.na(expenditure_m), 0, expenditure_m)
     )
+  
+  # Final check before returning
+  if(nrow(season_data) == 0) {
+    message("Warning: No data extracted for season ", season_year)
+    return(NULL)
+  }
   
   return(season_data)
 }
@@ -133,8 +230,28 @@ for(year in 1992:2025) {
 ```{r}
 # Clean and prepare final dataset
 final_data <- all_seasons %>%
+  # Make sure club names aren't NA
+  filter(!is.na(club)) %>%
+  # Ensure proper data types
+  mutate(
+    position = as.numeric(position),
+    expenditure_m = as.numeric(expenditure_m),
+    points = as.numeric(points)
+  ) %>%
+  # Sort by season and position
   arrange(season, position) %>%
   select(season, club, position, expenditure_m, points)
+
+# Check for any remaining NAs
+na_counts <- colSums(is.na(final_data))
+print(paste("NA values by column:", paste(names(na_counts), na_counts, sep=": ", collapse=", ")))
+
+# If there are still NAs, you might want to handle them
+if(sum(na_counts) > 0) {
+  final_data <- final_data %>%
+    # Replace NA expenditures with 0
+    mutate(expenditure_m = ifelse(is.na(expenditure_m), 0, expenditure_m))
+}
 
 # Save data to CSV
 write_csv(final_data, "92-25-income_expenditure_table_positions.csv")
