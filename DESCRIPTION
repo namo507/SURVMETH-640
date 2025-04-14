@@ -1,0 +1,9 @@
+Package: project-name
+Type: Package
+Title: What the Package Does (Title Case)
+Version: 0.1.0
+Author: Your Name
+Maintainer: Your Name <your.email@example.com>
+Description: What the package does (concise description).
+License: What license it uses
+Suggests: testthat
