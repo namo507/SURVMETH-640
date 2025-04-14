@@ -1563,60 +1563,94 @@ identify_key_columns()
 ```
 
 ```{r}
-# 2.2 Create a unified player performance dataset
+# Modified create_unified_dataset function with better column checking
 create_unified_dataset <- function() {
-  # First standardize minutes column
+  # First check what minutes columns are actually available
+  minutes_cols <- grep("Min|MP", colnames(player_standard_stats), value = TRUE)
+  cat("Available minutes columns:", paste(minutes_cols, collapse = ", "), "\n")
+  
+  # Add standardized minutes played column
   player_standard_stats <- player_standard_stats %>%
     mutate(
-      # Attempt to standardize minutes played
+      # Check which minutes column exists and use it appropriately
       Minutes_Played = case_when(
-        "Min" %in% names(.) ~ Min,
-        "MP_Playing" %in% names(.) ~ MP_Playing * 90,
-        "MP" %in% names(.) ~ MP * 90,
+        "Min_Playing" %in% colnames(player_standard_stats) ~ Min_Playing,
+        "MP_Playing" %in% colnames(player_standard_stats) ~ MP_Playing * 90, # Multiply games by 90 minutes
+        "Mins_Per_90_Playing" %in% colnames(player_standard_stats) ~ Mins_Per_90_Playing * 90,
         TRUE ~ 0
       )
     )
   
-  # Join all datasets
+  # Join all datasets using consistent keys
   unified_data <- player_standard_stats %>%
     # Join with shooting stats
     left_join(
       player_shooting_stats %>%
-        select(Player, Squad, Season_End_Year, contains("Sh"), contains("Gls"), contains("xG")),
+        select(Player, Squad, Season_End_Year, 
+               any_of(c(contains("Sh"), contains("Gls"), contains("xG")))),
       by = c("Player", "Squad", "Season_End_Year")
     ) %>%
     # Join with passing stats
     left_join(
       player_passing_stats %>%
-        select(Player, Squad, Season_End_Year, contains("Cmp"), contains("Att"), contains("xA"), KP),
+        select(Player, Squad, Season_End_Year,
+               any_of(c(contains("Cmp"), contains("Att"), contains("xA"), "KP"))),
       by = c("Player", "Squad", "Season_End_Year")
     ) %>%
     # Join with defensive stats
     left_join(
       player_defensive_stats %>%
-        select(Player, Squad, Season_End_Year, Tkl, Int, Blocks, Clr),
+        select(Player, Squad, Season_End_Year,
+               any_of(c("Tkl", "Int", "Blocks", "Clr"))),
       by = c("Player", "Squad", "Season_End_Year")
     ) %>%
     # Join with possession stats
     left_join(
       player_possession_stats %>%
-        select(Player, Squad, Season_End_Year, contains("Touches"), contains("Carries"), contains("Succ")),
+        select(Player, Squad, Season_End_Year,
+               any_of(c(contains("Touches"), contains("Carries"), contains("Prog")))),
       by = c("Player", "Squad", "Season_End_Year")
     )
   
-  # Add goalkeeper stats separately (as they have different metrics)
-  gk_data <- player_gk_stats %>%
-    select(Player, Squad, Season_End_Year, contains("Save"), contains("GA"), contains("PSxG"))
+  # Check if goalkeeper data exists and join if available
+  if (exists("player_gk_stats") && !is.null(player_gk_stats) && nrow(player_gk_stats) > 0) {
+    # Identify goalkeeper stat columns that actually exist
+    gk_cols <- c("Player", "Squad", "Season_End_Year")
+    
+    # Add save columns if they exist
+    possible_save_cols <- c("Save_percent", "Saves", "PSxG", "GA")
+    existing_save_cols <- intersect(possible_save_cols, colnames(player_gk_stats))
+    
+    if (length(existing_save_cols) > 0) {
+      unified_data <- unified_data %>%
+        left_join(
+          player_gk_stats %>%
+            select(Player, Squad, Season_End_Year, all_of(existing_save_cols)),
+          by = c("Player", "Squad", "Season_End_Year")
+        )
+    }
+  }
   
-  unified_data <- unified_data %>%
-    left_join(gk_data, by = c("Player", "Squad", "Season_End_Year"))
+  # Check for success
+  if (!"Minutes_Played" %in% colnames(unified_data) || all(unified_data$Minutes_Played == 0)) {
+    warning("Minutes_Played calculation may have failed. Check column names.")
+    
+    # As a fallback, if we failed to get Minutes_Played but we have MP_Playing
+    if ("MP_Playing" %in% colnames(unified_data)) {
+      cat("Using MP_Playing as fallback for minutes calculation\n")
+      unified_data <- unified_data %>%
+        mutate(Minutes_Played = MP_Playing * 90)
+    }
+  }
   
   return(unified_data)
 }
 
-# Create the unified dataset
+# Execute the fixed function
 player_data <- create_unified_dataset()
+```
 
+```{r}
 # 2.3 Feature engineering for player performance analysis
 player_data <- player_data %>%
   mutate(
