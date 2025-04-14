@@ -11,6 +11,143 @@ knitr::opts_chunk$set(echo = TRUE)
 installed.packages(c("tidyverse"))
 ```
 
+## Data Extraction
+
+```{r}
+# Data Extraction Process for Premier League Data
+# This code demonstrates how to scrape Transfermarkt data and save it to CSV
+
+# Load necessary libraries for web scraping and data manipulation
+library(rvest)
+library(dplyr)
+library(tidyr)
+library(readr)
+```
+
+```{r}
+# Function to extract season data from Transfermarkt
+extract_season_data <- function(season_year) {
+  # Construct URL for the given season (format: 1992 for 1992/93 season)
+  base_url <- paste0("https://www.transfermarkt.co.uk/premier-league/tabelle/wettbewerb/GB1?saison_id=", season_year)
+  
+  # Add delay to be respectful to the website
+  Sys.sleep(2)
+  
+  # Read and parse the webpage
+  page <- read_html(base_url)
+  
+  # Extract table data
+  table_data <- page %>%
+    html_nodes("table.items") %>%
+    html_table() %>%
+    .[[1]]
+  
+  # Clean column names and data
+  names(table_data) <- c("position", "club", "matches", "wins", "draws", "losses", 
+                         "goals_for", "goals_against", "goal_difference", "points")
+  
+  # Remove unnecessary rows and columns
+  table_data <- table_data %>%
+    filter(!is.na(position) & position != "") %>%
+    select(position, club, points)
+  
+  # Extract transfer expenditure from separate page
+  transfer_url <- paste0("https://www.transfermarkt.co.uk/premier-league/transfers/wettbewerb/GB1/plus/?saison_id=", season_year)
+  transfer_page <- read_html(transfer_url)
+  
+  # Extract club expenditure data
+  transfer_data <- transfer_page %>%
+    html_nodes(".large-8 .box") %>%
+    html_nodes("table") %>%
+    html_table()
+  
+  # Process transfer data to extract expenditure
+  expenditure_data <- data.frame(
+    club = character(),
+    expenditure_m = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  for(i in seq_along(transfer_data)) {
+    if(i %% 2 == 1) { # Club transfer tables are at odd indices
+      club_name <- transfer_page %>%
+        html_nodes(".large-8 .box h2") %>%
+        .[ceiling(i/2)] %>%
+        html_text() %>%
+        trimws()
+      
+      if(length(transfer_data[[i]]) > 0) {
+        # Get expenditure from last row, last column
+        exp_col <- ncol(transfer_data[[i]])
+        exp_row <- nrow(transfer_data[[i]])
+        exp_text <- transfer_data[[i]][exp_row, exp_col]
+        
+        # Parse the expenditure value (e.g., "€10.50m" to 10.5)
+        exp_value <- gsub("[^0-9.]", "", exp_text)
+        if(exp_value != "") {
+          exp_value <- as.numeric(exp_value)
+          if(grepl("m", exp_text)) {
+            exp_value <- exp_value # Already in millions
+          } else if(grepl("k", exp_text)) {
+            exp_value <- exp_value / 1000 # Convert thousands to millions
+          }
+        } else {
+          exp_value <- 0
+        }
+        
+        # Add to expenditure data
+        expenditure_data <- rbind(expenditure_data, 
+                                 data.frame(club = club_name, 
+                                           expenditure_m = exp_value,
+                                           stringsAsFactors = FALSE))
+      }
+    }
+  }
+  
+  # Join the tables
+  season_data <- table_data %>%
+    left_join(expenditure_data, by = "club") %>%
+    mutate(
+      position = as.numeric(position),
+      season = paste0(season_year, "/", substr(season_year + 1, 3, 4)),
+      expenditure_m = ifelse(is.na(expenditure_m), 0, expenditure_m)
+    )
+  
+  return(season_data)
+}
+```
+
+```{r}
+# Extract data for all Premier League seasons (1992/93 to 2025/26)
+all_seasons <- data.frame()
+for(year in 1992:2025) {
+  cat("Extracting data for season", year, "/", substr(year + 1, 3, 4), "\n")
+  season_data <- extract_season_data(year)
+  all_seasons <- rbind(all_seasons, season_data)
+  
+  # Save intermediate results in case of interruption
+  write_csv(all_seasons, "premier_league_data_partial.csv")
+}
+```
+
+```{r}
+# Clean and prepare final dataset
+final_data <- all_seasons %>%
+  arrange(season, position) %>%
+  select(season, club, position, expenditure_m, points)
+
+# Save data to CSV
+write_csv(final_data, "92-25-income_expenditure_table_positions.csv")
+
+# Display summary of extracted data
+cat("Data extraction complete. Saved", nrow(final_data), "records spanning", 
+    length(unique(final_data$season)), "seasons with", 
+    length(unique(final_data$club)), "unique clubs.\n")
+
+# Preview of the extracted data
+head(final_data)
+```
+
 ```{r echo=FALSE, message=FALSE}
 library(tidyverse)
 library(tidyjson)
@@ -27,6 +164,7 @@ data <- read.csv(file = "92-21-income_expenditure_table_positions.csv")
 ## Overview
 
 This analysis examines data from the English Premier League seasons 1992/92 through 2021/22 to investigate the relationship between transfer spending and on-field success. The data was extracted from [Transfermarkt](https://www.transfermarkt.co.uk).
+
 
 
 ## Permier League Winners
