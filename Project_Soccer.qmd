@@ -444,3 +444,172 @@ kable(predicted_champions,
       col.names = c("Season", "Year", "Predicted Champion", "Forecasted Expenditure (M EUR)", "Forecasted Position"),
       caption = "Predicted Premier League Champions for Next 20 Seasons")
 ```
+
+## Testing code 2
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(forecast)
+library(lubridate)
+
+# Read and prepare the data
+data <- read.csv(file = "92-21-income_expenditure_table_positions.csv")
+
+# Aggregate total expenditure per season
+spend_over_time <- data %>% 
+  group_by(season) %>% 
+  summarise(total_expenditure = sum(expenditure_m)) %>% 
+  arrange(season)
+
+# Extract the starting year from the season field (e.g., "1992/93" becomes 1992)
+spend_over_time <- spend_over_time %>% 
+  mutate(year = as.numeric(substr(season, 1, 4)))
+
+# Create a time series object from the aggregated data
+ts_expenditure <- ts(spend_over_time$total_expenditure, 
+                     start = min(spend_over_time$year), 
+                     frequency = 1)
+
+# Fit an ARIMA model automatically
+fit_arima <- auto.arima(ts_expenditure)
+print(summary(fit_arima))  # View model summary
+
+# Forecast the next 20 seasons / years
+forecast_expenditure <- forecast(fit_arima, h = 20)
+
+# Plot the forecast
+plot(forecast_expenditure, main="ARIMA Forecast: Total Expenditure for Next 20 Seasons")
+
+# Optionally, print forecast details
+print(forecast_expenditure)
+```
+
+```{r}
+# Load necessary libraries for machine learning and plotting
+library(randomForest)
+library(ggplot2)
+
+# Use the prepared spend_over_time data with 'year' and 'total_expenditure'
+model_data <- spend_over_time %>% select(year, total_expenditure)
+
+# Fit a random forest regression model
+rf_model <- randomForest(total_expenditure ~ year, data = model_data, ntree = 500, importance = TRUE)
+print(rf_model)
+
+# Create a new data frame for predictions for the next 20 years
+last_year <- max(model_data$year)
+future_years <- data.frame(year = seq(last_year + 1, last_year + 20, by = 1))
+
+# Predict future total expenditure using the random forest model
+future_years$predicted_expenditure <- predict(rf_model, newdata = future_years)
+
+# Plot historical data alongside the forecasted values
+ggplot() +
+  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "red", size = 2) +
+  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "red", linetype = "dashed") +
+  labs(title = "Random Forest Forecast: Total Expenditure (Historical vs. Future)",
+       x = "Year", y = "Total Expenditure (M EUR)") +
+  theme_minimal()
+
+# Optionally, display the future predictions
+print(future_years)
+```
+
+```{r}
+# Load libraries
+library(ggplot2)
+
+# Fit a linear regression model
+lm_model <- lm(total_expenditure ~ year, data = model_data)
+print(summary(lm_model))  # Model summary
+
+# Predict for the next 20 years
+future_years$predicted_expenditure <- predict(lm_model, newdata = future_years)
+
+# Plot historical and predicted data
+ggplot() +
+  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "green", size = 2) +
+  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "green", linetype = "dashed") +
+  labs(title = "Linear Regression Forecast: Total Expenditure",
+       x = "Year", y = "Total Expenditure (M EUR)") +
+  theme_minimal()
+
+print(future_years)
+```
+
+```{r}
+# Load necessary libraries
+library(e1071)
+
+# Fit an SVM model for regression
+svm_model <- svm(total_expenditure ~ year, data = model_data, type = "eps-regression")
+summary(svm_model)
+
+# Predict future expenditures
+future_years$predicted_expenditure <- predict(svm_model, newdata = future_years)
+
+# Plot historical and predicted data
+ggplot() +
+  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "purple", size = 2) +
+  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "purple", linetype = "dashed") +
+  labs(title = "SVM Forecast: Total Expenditure",
+       x = "Year", y = "Total Expenditure (M EUR)") +
+  theme_minimal()
+
+print(future_years)
+```
+
+```{r}
+# Load necessary libraries
+library(gbm)
+
+# Fit a GBM model for regression
+gbm_model <- gbm(total_expenditure ~ year, data = model_data, distribution = "gaussian", n.trees = 1000, shrinkage = 0.01)
+summary(gbm_model)
+
+# Predict future expenditures
+future_years$predicted_expenditure <- predict(gbm_model, newdata = future_years, n.trees = 1000)
+
+# Plot historical and predicted data
+ggplot() +
+  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "orange", size = 2) +
+  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "orange", linetype = "dashed") +
+  labs(title = "GBM Forecast: Total Expenditure",
+       x = "Year", y = "Total Expenditure (M EUR)") +
+  theme_minimal()
+
+print(future_years)
+```
+
+```{r}
+# Load necessary libraries
+library(nnet)
+
+# Fit a neural network model for regression
+nn_model <- nnet(total_expenditure ~ year, data = model_data, size = 5, linout = TRUE)
+summary(nn_model)
+
+# Predict future expenditures
+future_years$predicted_expenditure <- predict(nn_model, newdata = future_years)
+
+# Plot historical and predicted data
+ggplot() +
+  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
+  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "red", size = 2) +
+  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "red", linetype = "dashed") +
+  labs(title = "Neural Network Forecast: Total Expenditure",
+       x = "Year", y = "Total Expenditure (M EUR)") +
+  theme_minimal()
+
+print(future_years)
+```
