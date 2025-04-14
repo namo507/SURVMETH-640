@@ -35,8 +35,8 @@ library(tidyverse)
 library(tidyjson)
 library(dplyr)
 
-transfer_data_raw <- read_json(path = "data/92-21_income_expense_raw.json")
-epl_tables_raw <- read_json(path = "data/92-21_epl_tables_raw.json")
+transfer_data_raw <- read_json(path = "Income_expense_raw_1992-2021.json")
+epl_tables_raw <- read_json(path = "Epl_tables_raw_1992-2021.json")
 
 parse_number_value <- function(v) {
   is_k <- str_detect(v, "k$")
@@ -140,8 +140,11 @@ normalise_club_name <- function(v) {
   }
   return(v)
 }
+```
 
-# reshape the json array into a frame
+
+```{r}
+# Reshaping the json array into a frame
 transfer_data <- transfer_data_raw %>% 
   gather_array %>% 
   spread_values(
@@ -197,17 +200,12 @@ epl_tables <- epl_tables_raw %>%
   ) %>% 
   select(season, position, club, played, won, drawn, lost, goals_for, goals_against, goal_diff, points)
 
-# this piece of code will recreate the table for each season
-# sorted_tables <- epl_tables %>% 
-#   group_by(season) %>% 
-#   arrange(position, .by_group = TRUE)
-# 
-# sorted_tables %>% filter(season == 1992)
+## this piece of code will recreate the table for each season
+sorted_tables <- epl_tables %>% 
+  group_by(season) %>% 
+  arrange(position, .by_group = TRUE)
 
-# list all winners
-#sorted_tables %>% filter(position == 1)
-#ds1_clubs <- epl_tables %>% distinct(club) %>% arrange(club)
-#ds2_clubs <- transfer_data %>% distinct(club) %>% arrange(club)
+sorted_tables %>% filter(season == 1992)
 
 out <- transfer_data %>% 
   left_join(epl_tables, by = c("season" = "season", "club" = "club")) %>% 
@@ -215,7 +213,7 @@ out <- transfer_data %>%
     season, position, club, played, won, drawn, lost, goals_for, goals_against, goal_diff, points,
     income_m, expenditure_m, balance_m, arrivals, departures)
 
-write_csv(out, file = "92-21-income_expenditure_table_positions.csv")
+write_csv(out, file = "Income_expenditure_table_positions_1992-2021.csv")
 ```
 
 
@@ -230,7 +228,7 @@ library(prophet)
 library(caret)
 library(ranger)
 
-data <- read.csv(file = "92-21-income_expenditure_table_positions.csv")
+data <- read.csv(file = "Income_expenditure_table_positions_1992-2021.csv")
 ```
 
 ## Permier League Winners
