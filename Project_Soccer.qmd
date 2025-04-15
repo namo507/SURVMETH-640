@@ -19,6 +19,8 @@ library(rvest)
 library(httr)
 library(tidyverse)
 library(jsonlite)
+library(tidyjson)
+library(dplyr)
 
 # Function to scrape transfer data for a given season
 scrape_transfer_data <- function(season) {
@@ -165,10 +167,6 @@ Ok so this analysis examines data from the English Premier League seasons 1992/9
 ## Data Collection
 
 ```{r}
-library(tidyverse)
-library(tidyjson)
-library(dplyr)
-
 transfer_data_raw <- read_json(path = "Income_expense_raw_1992-2021.json")
 epl_tables_raw <- read_json(path = "Epl_tables_raw_1992-2021.json")
 
@@ -290,7 +288,7 @@ transfer_data <- transfer_data_raw %>%
     expenditure = jstring("expenditure"),
     balance = jstring("balance")
   ) %>% 
-  # clean columns that are meant to be numbers by removing non numeric characters
+  # cleaning columns that are meant to be numbers by removing non numeric characters
   # and converting them to number type
   mutate(
     club = mapply(normalise_club_name, club),
@@ -334,7 +332,6 @@ epl_tables <- epl_tables_raw %>%
   ) %>% 
   select(season, position, club, played, won, drawn, lost, goals_for, goals_against, goal_diff, points)
 
-## this piece of code will recreate the table for each season
 sorted_tables <- epl_tables %>% 
   group_by(season) %>% 
   arrange(position, .by_group = TRUE)
@@ -344,7 +341,9 @@ sorted_tables %>% filter(season == 1992)
 write_csv(sorted_tables, file = "Income_expenditure_table_posItions_1992-2021.csv")
 ```
 
+After processing the raw JSON data from Transfermarkt, I created a comprehensive Premier League dataset spanning from 1992 to 2021. I wrote two helper functions to clean up the data: one to parse monetary values correctly (handling those pesky "k" suffixes and converting them to millions), and another to standardize club names across all seasons (converting shorthand names like "Man Utd" to "Manchester United"). With these tools in place, I restructured the transfer data JSON, extracting key financial metrics like income, expenditure, and player movement statistics for each club. I did the same with the league tables, pulling season standings, match performance stats, and goal information.
 
+After normalizing the club names, I converted all text values to their proper numeric format, making sure to handle any missing values by replacing them with zeros where appropriate. I then arranged the league tables by position within each season to maintain the correct hierarchy. To verify everything was working correctly, I did a quick check on the 1992 season data. Finally, I saved the cleaned and formatted dataset to a CSV file for easier access in future analysis steps. This preparation work creates a foundation for exploring relationships between financial investments and on-field performance across the Premier League era.
 
 ```{r echo=FALSE, message=FALSE}
 library(tidyverse)
