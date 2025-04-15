@@ -1,5 +1,5 @@
 ---
-title: "English Premier League (1992/93 - 2021/22) Analysis"
+title: "English Premier League (1992/93 - 2021/22) Spending Analysis and Predictions for the next 20 years"
 author: "Namit Shrivastava"
 date: "2024-04-13"
 format: pdf
@@ -388,13 +388,31 @@ ggplot(winners_summary, aes(x = reorder(club, total_wins), y = total_wins)) +
 
 Manchester United has won 13 Premier League titles in 30 seasons, cementing their historic dominance. One now may look at how much each club spent on average and in total for their title victories.
 
+
 ```{r echo=FALSE}
 kable(winners_summary %>% select(club, total_spend, average_expenditure), caption = "Expenditure for each title win", col.names = c("Club names", "Total Expenditure (M) EUR", "Average per title (M) EUR"))
 ```
 
 ### Expenditure vs. League Position
 
-Spending a lot of money does not guarantee a better league position. The scatter plot below shows where each team finished in terms of expenditure during the season.
+Now spending a lot of money does not guarantee a better league position. The scatter plot below shows where each team finished in terms of expenditure during the season.
+
+```{r}
+total_spend <- winners %>% 
+  group_by(club) %>% 
+  summarise(
+    total_wins = n(),
+    total_spend = sum(expenditure_m),
+    total_spend_fmt = formatC(total_spend, format = "f", big.mark = ",", digits = 1),
+    average_expenditure = mean(expenditure_m),
+    total_income = sum(income_m),
+    average_income = mean(income_m),
+    net_spend = total_income - total_spend,
+    average_net_spend = average_income - average_expenditure,
+    total_arrivals = sum(arrivals)
+  ) %>% 
+  arrange(desc(total_wins))
+```
 
 ```{r echo=FALSE}
 ggplot(data, aes(expenditure_m, position)) +
@@ -405,7 +423,7 @@ ggplot(data, aes(expenditure_m, position)) +
 
 ### Spending over time
 
-How has spending in the Premier League changed over time?
+Now to see how has spending in the Premier League changed over time?
 
 ```{r echo=FALSE}
 spend_over_time <- data %>% 
@@ -419,6 +437,9 @@ ggplot(spend_over_time, aes(x = season, y = total_expenditure)) +
   labs(x = "Season", y = "Expenditure (M) EUR")
 ```
 
+
+
+## Modelling
 
 First, let me create a time series model that can analyze the spending trends and title wins:
 
@@ -464,7 +485,9 @@ create_club_ts <- function(club_name) {
     last_year = max(club_data$season_year)
   ))
 }
+```
 
+```{r}
 # Get clubs with sufficient data
 clubs_with_history <- data %>%
   group_by(club) %>%
