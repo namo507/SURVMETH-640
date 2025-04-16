@@ -648,23 +648,17 @@ ggplot(correlation_data, aes(x = avg_expenditure, y = avg_position)) +
 ```{r}
 library(lubridate)
 library(tidymodels)
+library(zoo)
+library(dplyr)
 
 prepare_ml_data <- function(club_ts) {
-  # Convert ts object to dataframe with lagged features
-  max_lag <- 5  # Using 5-year history for feature engineering
   df <- data.frame(
     year = time(club_ts$expenditure_ts),
-    expenditure = as.numeric(club_ts$expenditure_ts),
-    position = as.numeric(club_ts$position_ts)
+    expenditure = as.numeric(club_ts$expenditure_ts)
   ) %>%
     mutate(
-      expenditure_lag1 = lag(expenditure, 1),
-      position_lag1 = lag(position, 1),
-      expenditure_ma3 = rollmean(expenditure, 3, fill = NA, align = "right"),
-      position_ma3 = rollmean(position, 3, fill = NA, align = "right")
-    ) %>%
-    filter(year >= (min(year) + max_lag))  # Ensure full feature window
-    
+      expenditure_ma3 = zoo::rollmean(expenditure, 3, fill = NA, align = "right")
+    )
   return(df)
 }
 ```
@@ -799,42 +793,6 @@ evaluate_models <- function(models, test_data) {
 }
 ```
 
-## Full Prediction Pipeline
-
-```{r}
-run_full_forecast <- function(club_name) {
-  # Prepare data
-  club_ts <- club_ts_list[[club_name]]
-  ml_data <- prepare_ml_data(club_ts)
-  
-  # Train models
-  models <- train_forecast_models(ml_data)
-  
-  # Generate forecasts
-  last_known <- tail(ml_data, 1)
-  forecasts <- lapply(models, generate_forecasts, 
-                     last_known = last_known, 
-                     horizon = forecast_horizon)
-  
-  # Create ensemble forecast
-  ensemble_forecast <- rowMeans(as.data.frame(forecasts))
-  
-  # Format results
-  forecast_years <- (club_ts$last_year + 1):(club_ts$last_year + forecast_horizon)
-  result <- data.frame(
-    year = forecast_years,
-    ensemble = ensemble_forecast,
-    arima = forecasts$arima,
-    prophet = forecasts$prophet,
-    lstm = forecasts$lstm,
-    rf = forecasts$rf,
-    svr = forecasts$svr
-  )
-  
-  return(result)
-}
-```
-
 ## Execute for Top Clubs
 
 ```{r}
@@ -857,42 +815,11 @@ clubs_with_history <- data %>%
 print(clubs_with_history)
 ```
 
-```{r}
-club_ts_list <- lapply(clubs_with_history, function(club_name) {
-  club_data <- data %>% 
-    filter(club == club_name) %>%
-    arrange(season_year)
-  
-  list(
-    club = club_name,
-    expenditure_ts = ts(club_data$expenditure_m, start = min(club_data$season_year)),
-    position_ts = ts(club_data$position, start = min(club_data$season_year))
-  )
-}) %>% setNames(clubs_with_history)
 
-# 5. Select the top 6 clubs by number of seasons in the data
-top_clubs <- head(clubs_with_history, 6)
 
-# 6. Run your forecasting function for each top club
-top_clubs_forecast <- lapply(top_clubs, run_full_forecast)
-names(top_clubs_forecast) <- top_clubs
 
-# 7. Example visualization for Manchester United
-library(ggplot2)
-manutd_forecast <- top_clubs_forecast[["Manchester United"]]
 
-ggplot(manutd_forecast, aes(x = year)) +
-  geom_line(aes(y = ensemble), color = "black", size = 1.2) +
-  geom_line(aes(y = arima), color = "blue", alpha = 0.5) +
-  geom_line(aes(y = prophet), color = "green", alpha = 0.5) +
-  geom_line(aes(y = lstm), color = "red", alpha = 0.5) +
-  geom_line(aes(y = rf), color = "purple", alpha = 0.5) +
-  geom_line(aes(y = svr), color = "orange", alpha = 0.5) +
-  labs(title = "Manchester United 20-Year Expenditure Forecast Comparison",
-       x = "Year", y = "Expenditure (M EUR)") +
-  theme_minimal()
 
-```
 
 
 
