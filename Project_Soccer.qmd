@@ -456,7 +456,9 @@ data <- data %>%
     season_year = as.numeric(substr(season, 1, 4)),
     relative_expenditure = expenditure_m / mean(expenditure_m, na.rm = TRUE)
   )
+```
 
+```{r}
 # 2. Create time series for each club's expenditure and position
 create_club_ts <- function(club_name) {
   # Extract data for this club
@@ -482,7 +484,8 @@ create_club_ts <- function(club_name) {
     club = club_name,
     expenditure_ts = exp_ts,
     position_ts = pos_ts,
-    last_year = max(club_data$season_year)
+    last_year = max(club_data$season_year),
+    data = club_data  # Include original data for plotting
   ))
 }
 ```
@@ -493,11 +496,151 @@ clubs_with_history <- data %>%
   group_by(club) %>%
   summarize(seasons = n()) %>%
   filter(seasons >= 5) %>%
+  arrange(desc(seasons)) %>%
   pull(club)
 
 # Create time series for each club
 club_ts_list <- lapply(clubs_with_history, create_club_ts)
 names(club_ts_list) <- clubs_with_history
+```
+
+```{r}
+# 3. Visualize time series data for top clubs (e.g., top 6 by presence in dataset)
+top_clubs <- head(clubs_with_history, 6)
+
+# Plot expenditure trends for top clubs
+expenditure_plot <- ggplot() +
+  theme_light() +
+  labs(title = "Expenditure Trends for Top Premier League Clubs",
+       x = "Season", 
+       y = "Expenditure (M EUR)")
+
+for(club in top_clubs) {
+  club_data <- club_ts_list[[club]]$data
+  expenditure_plot <- expenditure_plot + 
+    geom_line(data = club_data, 
+              aes(x = season_year, y = expenditure_m, color = club),
+              size = 1) +
+    geom_point(data = club_data, 
+               aes(x = season_year, y = expenditure_m, color = club))
+}
+
+# Displaying the plot
+print(expenditure_plot)
+```
+
+```{r}
+# 4. Analyze relationship between expenditure and position
+position_plot <- ggplot() +
+  theme_light() +
+  labs(title = "League Position vs. Expenditure for Top Premier League Clubs",
+       x = "Season", 
+       y = "Position (lower is better)")
+
+for(club in top_clubs) {
+  club_data <- club_ts_list[[club]]$data
+  position_plot <- position_plot + 
+    geom_line(data = club_data, 
+              aes(x = season_year, y = position, color = club),
+              size = 1) +
+    geom_point(data = club_data, 
+               aes(x = season_year, y = position, color = club))
+}
+
+# Display the plot with y-axis flipped (so 1st position is at top)
+print(position_plot + scale_y_reverse())
+```
+
+```{r}
+# 5. Create a summary table of club expenditure statistics
+club_spending_summary <- data.frame()
+
+for(club in clubs_with_history) {
+  club_data <- club_ts_list[[club]]$data
+  if(!is.null(club_data) && nrow(club_data) > 0) {
+    summary_row <- data.frame(
+      Club = club,
+      Seasons = nrow(club_data),
+      Avg_Position = mean(club_data$position, na.rm = TRUE),
+      Total_Spent = sum(club_data$expenditure_m, na.rm = TRUE),
+      Avg_Annual_Spend = mean(club_data$expenditure_m, na.rm = TRUE),
+      Best_Position = min(club_data$position, na.rm = TRUE),
+      Worst_Position = max(club_data$position, na.rm = TRUE)
+    )
+    club_spending_summary <- rbind(club_spending_summary, summary_row)
+  }
+}
+```
+
+```{r}
+# Sort by average position (ascending) and display top 10
+top_clubs_by_position <- club_spending_summary %>%
+  arrange(Avg_Position) %>%
+  head(10)
+
+print(top_clubs_by_position)
+```
+
+```{r}
+# 6. Forecast expenditure for the next 5 seasons for a selected club (e.g., Manchester United)
+selected_club <- "Manchester United"
+
+if(selected_club %in% names(club_ts_list)) {
+  club_ts <- club_ts_list[[selected_club]]
+  
+  # Fit ARIMA model
+  exp_model <- auto.arima(club_ts$expenditure_ts)
+  
+  # Create forecast
+  forecast_years <- 5
+  exp_forecast <- forecast(exp_model, h = forecast_years)
+  
+  # Plot forecast
+  plot(exp_forecast, 
+       main = paste("Expenditure Forecast for", selected_club, "(Next 5 Seasons)"),
+       xlab = "Season", 
+       ylab = "Expenditure (M EUR)")
+  
+  # Generate forecast table
+  forecast_years <- (club_ts$last_year + 1):(club_ts$last_year + forecast_years)
+  forecast_seasons <- paste0(forecast_years, "/", substr(forecast_years + 1, 3, 4))
+  
+  forecast_table <- data.frame(
+    Season = forecast_seasons,
+    Forecasted_Expenditure = round(exp_forecast$mean, 2),
+    Lower_95 = round(exp_forecast$lower[,2], 2),
+    Upper_95 = round(exp_forecast$upper[,2], 2)
+  )
+  
+  print(forecast_table)
+}
+```
+
+```{r}
+# 7. Investigate correlation between expenditure and position
+correlation_data <- data %>%
+  group_by(club) %>%
+  summarize(
+    avg_expenditure = mean(expenditure_m, na.rm = TRUE),
+    avg_position = mean(position, na.rm = TRUE),
+    seasons = n()
+  ) %>%
+  filter(seasons >= 5)
+
+# Create correlation plot
+ggplot(correlation_data, aes(x = avg_expenditure, y = avg_position)) +
+  geom_point(aes(size = seasons, color = club)) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkgray") +
+  scale_y_reverse() +  # Reverse Y axis so 1st position is on top
+  theme_light() +
+  labs(
+    title = "Relationship Between Average Expenditure and League Position",
+    subtitle = "Premier League 1992-2021",
+    x = "Average Annual Expenditure (M EUR)",
+    y = "Average League Position (lower is better)",
+    size = "Seasons in PL"
+  ) +
+  theme(legend.position = "right")
 ```
 
 Building ARIMA Forecasting Models
@@ -795,173 +938,4 @@ Based on our comprehensive time series analysis, we can generate a table of pred
 kable(predicted_champions, 
       col.names = c("Season", "Year", "Predicted Champion", "Forecasted Expenditure (M EUR)", "Forecasted Position"),
       caption = "Predicted Premier League Champions for Next 20 Seasons")
-```
-
-## Testing code 2
-
-```{r}
-# Load necessary libraries
-library(tidyverse)
-library(forecast)
-library(lubridate)
-
-# Read and prepare the data
-data <- read.csv(file = "92-21-income_expenditure_table_positions.csv")
-
-# Aggregate total expenditure per season
-spend_over_time <- data %>% 
-  group_by(season) %>% 
-  summarise(total_expenditure = sum(expenditure_m)) %>% 
-  arrange(season)
-
-# Extract the starting year from the season field (e.g., "1992/93" becomes 1992)
-spend_over_time <- spend_over_time %>% 
-  mutate(year = as.numeric(substr(season, 1, 4)))
-
-# Create a time series object from the aggregated data
-ts_expenditure <- ts(spend_over_time$total_expenditure, 
-                     start = min(spend_over_time$year), 
-                     frequency = 1)
-
-# Fit an ARIMA model automatically
-fit_arima <- auto.arima(ts_expenditure)
-print(summary(fit_arima))  # View model summary
-
-# Forecast the next 20 seasons / years
-forecast_expenditure <- forecast(fit_arima, h = 20)
-
-# Plot the forecast
-plot(forecast_expenditure, main="ARIMA Forecast: Total Expenditure for Next 20 Seasons")
-
-# Optionally, print forecast details
-print(forecast_expenditure)
-```
-
-```{r}
-# Load necessary libraries for machine learning and plotting
-library(randomForest)
-library(ggplot2)
-
-# Use the prepared spend_over_time data with 'year' and 'total_expenditure'
-model_data <- spend_over_time %>% select(year, total_expenditure)
-
-# Fit a random forest regression model
-rf_model <- randomForest(total_expenditure ~ year, data = model_data, ntree = 500, importance = TRUE)
-print(rf_model)
-
-# Create a new data frame for predictions for the next 20 years
-last_year <- max(model_data$year)
-future_years <- data.frame(year = seq(last_year + 1, last_year + 20, by = 1))
-
-# Predict future total expenditure using the random forest model
-future_years$predicted_expenditure <- predict(rf_model, newdata = future_years)
-
-# Plot historical data alongside the forecasted values
-ggplot() +
-  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "red", size = 2) +
-  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "red", linetype = "dashed") +
-  labs(title = "Random Forest Forecast: Total Expenditure (Historical vs. Future)",
-       x = "Year", y = "Total Expenditure (M EUR)") +
-  theme_minimal()
-
-# Optionally, display the future predictions
-print(future_years)
-```
-
-```{r}
-# Load libraries
-library(ggplot2)
-
-# Fit a linear regression model
-lm_model <- lm(total_expenditure ~ year, data = model_data)
-print(summary(lm_model))  # Model summary
-
-# Predict for the next 20 years
-future_years$predicted_expenditure <- predict(lm_model, newdata = future_years)
-
-# Plot historical and predicted data
-ggplot() +
-  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "green", size = 2) +
-  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "green", linetype = "dashed") +
-  labs(title = "Linear Regression Forecast: Total Expenditure",
-       x = "Year", y = "Total Expenditure (M EUR)") +
-  theme_minimal()
-
-print(future_years)
-```
-
-```{r}
-# Load necessary libraries
-library(e1071)
-
-# Fit an SVM model for regression
-svm_model <- svm(total_expenditure ~ year, data = model_data, type = "eps-regression")
-summary(svm_model)
-
-# Predict future expenditures
-future_years$predicted_expenditure <- predict(svm_model, newdata = future_years)
-
-# Plot historical and predicted data
-ggplot() +
-  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "purple", size = 2) +
-  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "purple", linetype = "dashed") +
-  labs(title = "SVM Forecast: Total Expenditure",
-       x = "Year", y = "Total Expenditure (M EUR)") +
-  theme_minimal()
-
-print(future_years)
-```
-
-```{r}
-# Load necessary libraries
-library(gbm)
-
-# Fit a GBM model for regression
-gbm_model <- gbm(total_expenditure ~ year, data = model_data, distribution = "gaussian", n.trees = 1000, shrinkage = 0.01)
-summary(gbm_model)
-
-# Predict future expenditures
-future_years$predicted_expenditure <- predict(gbm_model, newdata = future_years, n.trees = 1000)
-
-# Plot historical and predicted data
-ggplot() +
-  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "orange", size = 2) +
-  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "orange", linetype = "dashed") +
-  labs(title = "GBM Forecast: Total Expenditure",
-       x = "Year", y = "Total Expenditure (M EUR)") +
-  theme_minimal()
-
-print(future_years)
-```
-
-```{r}
-# Load necessary libraries
-library(nnet)
-
-# Fit a neural network model for regression
-nn_model <- nnet(total_expenditure ~ year, data = model_data, size = 5, linout = TRUE)
-summary(nn_model)
-
-# Predict future expenditures
-future_years$predicted_expenditure <- predict(nn_model, newdata = future_years)
-
-# Plot historical and predicted data
-ggplot() +
-  geom_point(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_line(data = model_data, aes(x = year, y = total_expenditure), color = "blue") +
-  geom_point(data = future_years, aes(x = year, y = predicted_expenditure), color = "red", size = 2) +
-  geom_line(data = future_years, aes(x = year, y = predicted_expenditure), color = "red", linetype = "dashed") +
-  labs(title = "Neural Network Forecast: Total Expenditure",
-       x = "Year", y = "Total Expenditure (M EUR)") +
-  theme_minimal()
-
-print(future_years)
 ```
