@@ -643,6 +643,261 @@ ggplot(correlation_data, aes(x = avg_expenditure, y = avg_position)) +
   theme(legend.position = "right")
 ```
 
+## Enhanced Feature Engineering for ML Models
+
+```{r}
+library(lubridate)
+library(tidymodels)
+
+prepare_ml_data <- function(club_ts) {
+  # Convert ts object to dataframe with lagged features
+  max_lag <- 5  # Using 5-year history for feature engineering
+  df <- data.frame(
+    year = time(club_ts$expenditure_ts),
+    expenditure = as.numeric(club_ts$expenditure_ts),
+    position = as.numeric(club_ts$position_ts)
+  ) %>%
+    mutate(
+      expenditure_lag1 = lag(expenditure, 1),
+      position_lag1 = lag(position, 1),
+      expenditure_ma3 = rollmean(expenditure, 3, fill = NA, align = "right"),
+      position_ma3 = rollmean(position, 3, fill = NA, align = "right")
+    ) %>%
+    filter(year >= (min(year) + max_lag))  # Ensure full feature window
+    
+  return(df)
+}
+```
+
+## Multi-Model Forecasting Framework
+
+```{r}
+library(prophet)
+library(keras)
+library(randomForest)
+library(e1071)
+
+forecast_horizon <- 20  # 20-year forecast
+
+train_forecast_models <- function(club_data) {
+  # Split data
+  split <- initial_time_split(club_data, prop = 0.8)
+  train <- training(split)
+  test <- testing(split)
+  
+  # Model 1: ARIMA (Enhanced)
+  arima_model <- auto.arima(train$expenditure)
+  
+  # Model 2: Prophet (Facebook's forecasting model)
+  prophet_df <- data.frame(
+    ds = as.Date(paste0(train$year, "-01-01")),
+    y = train$expenditure
+  )
+  prophet_model <- prophet(prophet_df)
+  
+  # Model 3: LSTM Neural Network
+  lstm_model <- keras_model_sequential() %>%
+    layer_lstm(units = 50, input_shape = c(3, 1)) %>%
+    layer_dense(units = 1)
+  
+  # Model 4: Random Forest with Feature Engineering
+  rf_model <- randomForest(
+    expenditure ~ year + expenditure_lag1 + position_lag1,
+    data = train
+  )
+  
+  # Model 5: Support Vector Regression
+  svr_model <- svm(
+    expenditure ~ year + expenditure_lag1 + position_lag1,
+    data = train,
+    kernel = "radial"
+  )
+  
+  return(list(
+    arima = arima_model,
+    prophet = prophet_model,
+    lstm = lstm_model,
+    rf = rf_model,
+    svr = svr_model
+  ))
+}
+```
+
+## Recursive Forecasting Function
+
+```{r}
+generate_forecasts <- function(model, last_known_data, horizon) {
+  forecasts <- numeric(horizon)
+  current_data <- last_known_data
+  
+  for(i in 1:horizon) {
+    # Update year
+    current_data$year <- current_data$year + 1
+    
+    # Generate prediction
+    pred <- switch(
+      class(model)[1],
+      "ARIMA" = forecast(model, h = 1)$mean[1],
+      "prophet" = predict(model, make_future_dataframe(model, periods = 1))$yhat[1],
+      "randomForest" = predict(model, current_data),
+      "svm" = predict(model, current_data),
+      "keras.engine.sequential.Sequential" = predict(model, current_data)
+    )
+    
+    # Update lag features
+    current_data$expenditure_lag1 <- current_data$expenditure
+    current_data$expenditure <- pred
+    forecasts[i] <- pred
+  }
+  
+  return(forecasts)
+}
+```
+
+## Ensemble Model with Model Stacking
+
+```{r}
+library(stacks)
+
+create_ensemble_model <- function(train_data) {
+  # Define base models
+  model_spec <- 
+    stacks() %>%
+    add_candidates(linear_reg()) %>%
+    add_candidates(rand_forest()) %>%
+    add_candidates(svm_rbf())
+  
+  # Train ensemble
+  ensemble_model <- 
+    model_spec %>%
+    blend_predictions() %>%
+    fit_members()
+  
+  return(ensemble_model)
+}
+```
+
+## Model Evaluation Framework
+
+```{r}
+evaluate_models <- function(models, test_data) {
+  metrics <- data.frame()
+  
+  for(model_name in names(models)) {
+    preds <- predict(models[[model_name]], test_data)
+    res <- postResample(preds, test_data$expenditure)
+    
+    metrics <- rbind(metrics, data.frame(
+      model = model_name,
+      RMSE = res[["RMSE"]],
+      MAE = res[["MAE"]],
+      R2 = res[["Rsquared"]]
+    ))
+  }
+  
+  return(metrics)
+}
+```
+
+## Full Prediction Pipeline
+
+```{r}
+run_full_forecast <- function(club_name) {
+  # Prepare data
+  club_ts <- club_ts_list[[club_name]]
+  ml_data <- prepare_ml_data(club_ts)
+  
+  # Train models
+  models <- train_forecast_models(ml_data)
+  
+  # Generate forecasts
+  last_known <- tail(ml_data, 1)
+  forecasts <- lapply(models, generate_forecasts, 
+                     last_known = last_known, 
+                     horizon = forecast_horizon)
+  
+  # Create ensemble forecast
+  ensemble_forecast <- rowMeans(as.data.frame(forecasts))
+  
+  # Format results
+  forecast_years <- (club_ts$last_year + 1):(club_ts$last_year + forecast_horizon)
+  result <- data.frame(
+    year = forecast_years,
+    ensemble = ensemble_forecast,
+    arima = forecasts$arima,
+    prophet = forecasts$prophet,
+    lstm = forecasts$lstm,
+    rf = forecasts$rf,
+    svr = forecasts$svr
+  )
+  
+  return(result)
+}
+```
+
+## Execute for Top Clubs
+
+```{r}
+data <- read.csv("Income_expenditure_table_posItIons_1992-2021.csv", stringsAsFactors = FALSE)
+
+# Ensuring column names are lower case for consistency
+names(data) <- tolower(names(data))
+str(data)
+```
+
+```{r}
+clubs_with_history <- data %>%
+  group_by(club) %>%
+  summarize(seasons = n()) %>%
+  filter(seasons >= 5) %>%
+  arrange(desc(seasons)) %>%
+  pull(club)
+
+# 3. Verify clubs_with_history exists
+print(clubs_with_history)
+```
+
+```{r}
+club_ts_list <- lapply(clubs_with_history, function(club_name) {
+  club_data <- data %>% 
+    filter(club == club_name) %>%
+    arrange(season_year)
+  
+  list(
+    club = club_name,
+    expenditure_ts = ts(club_data$expenditure_m, start = min(club_data$season_year)),
+    position_ts = ts(club_data$position, start = min(club_data$season_year))
+  )
+}) %>% setNames(clubs_with_history)
+
+# 5. Select the top 6 clubs by number of seasons in the data
+top_clubs <- head(clubs_with_history, 6)
+
+# 6. Run your forecasting function for each top club
+top_clubs_forecast <- lapply(top_clubs, run_full_forecast)
+names(top_clubs_forecast) <- top_clubs
+
+# 7. Example visualization for Manchester United
+library(ggplot2)
+manutd_forecast <- top_clubs_forecast[["Manchester United"]]
+
+ggplot(manutd_forecast, aes(x = year)) +
+  geom_line(aes(y = ensemble), color = "black", size = 1.2) +
+  geom_line(aes(y = arima), color = "blue", alpha = 0.5) +
+  geom_line(aes(y = prophet), color = "green", alpha = 0.5) +
+  geom_line(aes(y = lstm), color = "red", alpha = 0.5) +
+  geom_line(aes(y = rf), color = "purple", alpha = 0.5) +
+  geom_line(aes(y = svr), color = "orange", alpha = 0.5) +
+  labs(title = "Manchester United 20-Year Expenditure Forecast Comparison",
+       x = "Year", y = "Expenditure (M EUR)") +
+  theme_minimal()
+
+```
+
+
+
+
+
 Building ARIMA Forecasting Models
 
 ARIMA models are well-suited for our analysis as they can capture the complex temporal dynamics of team performance and financial investment. The forecast package in R provides robust implementations of these models
@@ -692,7 +947,8 @@ forecast_club <- function(club_ts, horizon = 20) {
     return(NULL)
   })
 }
-
+```
+```{r}
 # Generate forecasts for all clubs
 club_forecasts <- lapply(club_ts_list, forecast_club)
 names(club_forecasts) <- clubs_with_history
