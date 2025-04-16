@@ -815,310 +815,107 @@ clubs_with_history <- data %>%
 print(clubs_with_history)
 ```
 
-
-
-
-
-
-
-
-
-
-
-Building ARIMA Forecasting Models
-
-ARIMA models are well-suited for our analysis as they can capture the complex temporal dynamics of team performance and financial investment. The forecast package in R provides robust implementations of these models
+## Premier League Expenditure Forecasting Pipeline
 
 ```{r}
-# 3. Build ARIMA models and generate forecasts
-forecast_club <- function(club_ts, horizon = 20) {
-  if(is.null(club_ts)) {
-    return(NULL)
-  }
+library(tidyverse)
+library(forecast)
+library(zoo)
+library(purrr)
+library(ggplot2)
+
+theme_set(theme_minimal())
+```
+
+```{r}
+load_process_data <- function() {
+  # Read and validate raw data
+  raw_data <- read.csv("Income_expenditure_table_posItIons_1992-2021.csv") %>%
+    mutate(
+      season_year = as.numeric(substr(as.character(season), 1, 4)),
+      expenditure_m = as.numeric(expenditure_m),
+      position = as.numeric(position)
+    ) %>%
+    filter(!is.na(expenditure_m))  # Remove missing financial data
   
-  # Fit ARIMA models
+  # Critical column check
+  stopifnot(c("club", "expenditure_m", "season_year") %in% colnames(raw_data))
+  
+  return(raw_data)
+}
+```
+
+```{r}
+# Time Series Creation
+create_club_timeseries <- function(data) {
+  data %>%
+    group_by(club) %>%
+    filter(n() >= 5) %>%  # Require minimum 5 seasons
+    group_split() %>%
+    map(~{
+      ts_data <- list(
+        expenditure_ts = ts(.x$expenditure_m, 
+                           start = min(.x$season_year)),
+        position_ts = ts(.x$position, 
+                        start = min(.x$season_year)),
+        last_year = max(.x$season_year),
+        club = unique(.x$club)
+      )
+      structure(ts_data, class = "club_ts")
+    }) %>%
+    set_names(map(., ~.x$club)) %>%
+    compact()  # Remove NULL entries
+}
+```
+
+```{r}
+# Forecasting Core
+arima_forecast <- function(ts_object, horizon = 20) {
   tryCatch({
-    exp_model <- auto.arima(club_ts$expenditure_ts)
-    pos_model <- auto.arima(club_ts$position_ts)
+    model <- forecast::auto.arima(ts_object$expenditure_ts)
+    forecast <- forecast::forecast(model, h = horizon)
     
-    # Generate forecasts
-    exp_forecast <- forecast(exp_model, h = horizon)
-    pos_forecast <- forecast(pos_model, h = horizon)
-    
-    # Create forecast dataframe
-    forecast_years <- (club_ts$last_year + 1):(club_ts$last_year + horizon)
-    forecast_seasons <- paste0(forecast_years, "/", substr(forecast_years + 1, 3, 4))
-    
-    forecast_df <- data.frame(
-      club = club_ts$club,
-      season = forecast_seasons,
-      year = forecast_years,
-      forecasted_expenditure = as.numeric(exp_forecast$mean),
-      forecasted_position = as.numeric(pos_forecast$mean),
-      exp_lower_95 = as.numeric(exp_forecast$lower[,2]),
-      exp_upper_95 = as.numeric(exp_forecast$upper[,2]),
-      pos_lower_95 = as.numeric(pos_forecast$lower[,2]),
-      pos_upper_95 = as.numeric(pos_forecast$upper[,2])
+    tibble(
+      year = seq(ts_object$last_year + 1, length.out = horizon),
+      forecast = as.numeric(forecast$mean),
+      club = ts_object$club
     )
-    
-    return(list(
-      club = club_ts$club,
-      exp_model = exp_model,
-      pos_model = pos_model,
-      exp_forecast = exp_forecast,
-      pos_forecast = pos_forecast,
-      forecast_df = forecast_df
-    ))
   }, error = function(e) {
-    message(paste("Error forecasting for", club_ts$club, ":", e$message))
+    message("Forecast failed for ", ts_object$club, ": ", e$message)
     return(NULL)
   })
 }
 ```
+
 ```{r}
-# Generate forecasts for all clubs
-club_forecasts <- lapply(club_ts_list, forecast_club)
-names(club_forecasts) <- clubs_with_history
+pl_data <- load_process_data()
+
+# Creating time series objects
+club_ts_list <- create_club_timeseries(pl_data)
+
+# Identifying top clubs by data availability
+top_clubs <- pl_data %>%
+  count(club) %>%
+  filter(n >= 5) %>%
+  slice_max(n, n = 6) %>%
+  pull(club)
+
+# Generating forecasts
+forecast_results <- map_dfr(top_clubs, ~{
+  ts_obj <- club_ts_list[[.x]]
+  if(is.null(ts_obj)) return(NULL)
+  arima_forecast(ts_obj)
+})
 ```
 
-The auto.arima() function automatically selects the optimal ARIMA parameters based on information criteria, fitting the best model to each club's historical expenditure and position data.
-
-
-Combining Forecasts and Determining Future Champions
-With individual club forecasts generated, we can now combine them and determine the most likely Premier League champions for each future season:
-
 ```{r}
-# 4. Combine all forecasts
-all_forecasts <- do.call(rbind, lapply(club_forecasts, function(fc) {
-  if(!is.null(fc)) {
-    return(fc$forecast_df)
-  } else {
-    return(NULL)
-  }
-}))
-
-# 5. Determine champions for each future season
-predicted_champions <- all_forecasts %>%
-  group_by(season) %>%
-  # Get club with lowest predicted position (best)
-  arrange(forecasted_position, .by_group = TRUE) %>%
-  slice(1) %>%
-  select(season, year, club, forecasted_expenditure, forecasted_position)
-```
-
-
-Advanced Model Validation
-To ensure our forecasts are reliable, we should validate our time series models against alternative approaches. One method is to create a regression model that directly relates expenditure to league position:
-
-```{r}
-# 1. Check for problematic values in expenditure_m
-summary(data$expenditure_m)
-sum(data$expenditure_m <= 0, na.rm = TRUE)  # Count zero/negative values
-
-# 2. Handle zero/negative expenditures (if any exist)
-data_clean <- data %>%
-  filter(expenditure_m > 0) %>%  # Remove rows with zero/negative spending
-  mutate(log_expenditure = log(expenditure_m))  # Create logged variable
-
-# 3. Verify clean data
-sum(is.infinite(data_clean$log_expenditure))  # Should return 0
-sum(is.na(data_clean$log_expenditure))  # Check for remaining NA values
-
-# 4. Build model with clean data
-position_model <- lm(position ~ log_expenditure, 
-                    data = data_clean,
-                    na.action = na.omit)
-
-summary(position_model)
-
-
-# Generate position predictions based on expenditure
-all_forecasts$model_position <- predict(
-  position_model,
-  newdata = data.frame(
-    log_expenditure = log(all_forecasts$forecasted_expenditure)
-  )
-)
-
-# Compare the two approaches
-comparison <- all_forecasts %>%
-  select(club, season, forecasted_expenditure, forecasted_position, model_position) %>%
-  mutate(position_difference = forecasted_position - model_position)
-```
-
-This comparison between time series forecasts and regression-based predictions helps validate our methodology and identify potential discrepancies
-
-Implementing Machine Learning Enhancement
-For more sophisticated predictions, we can incorporate machine learning approaches using supervised learning models
-
-```{r}
-# Enhanced prediction with machine learning features
-library(caret)
-library(randomForest)
-
-# Create lagged features for time series machine learning
-enhance_data <- data %>%
-  group_by(club) %>%
-  arrange(season_year) %>%
-  mutate(
-    prev_position = lag(position),
-    prev_expenditure = lag(expenditure_m),
-    position_trend = position - prev_position,
-    is_previous_winner = ifelse(lag(position) == 1, 1, 0)
-  ) %>%
-  ungroup() %>%
-  filter(!is.na(prev_position))
-
-# Train random forest model
-rf_model <- randomForest(
-  position ~ expenditure_m + prev_position + prev_expenditure + position_trend + is_previous_winner,
-  data = enhance_data,
-  ntree = 500
-)
-
-# Function to recursively predict future positions
-predict_future_positions <- function(club_data, expenditure_forecast, years = 20) {
-  results <- data.frame()
-  current_position <- tail(club_data$position, 1)
-  current_expenditure <- tail(club_data$expenditure_m, 1)
-  
-  for (i in 1:years) {
-    next_expenditure <- expenditure_forecast[i]
-    
-    pred_data <- data.frame(
-      expenditure_m = next_expenditure,
-      prev_position = current_position,
-      prev_expenditure = current_expenditure,
-      position_trend = 0,  # Will be updated
-      is_previous_winner = ifelse(current_position == 1, 1, 0)
-    )
-    
-    # Predict position
-    next_position <- predict(rf_model, pred_data)
-    position_trend <- next_position - current_position
-    
-    # Store results
-    results <- rbind(results, data.frame(
-      year = max(club_data$season_year) + i,
-      forecasted_position = next_position,
-      forecasted_expenditure = next_expenditure
-    ))
-    
-    # Update for next iteration
-    current_position <- next_position
-    current_expenditure <- next_expenditure
-    pred_data$position_trend <- position_trend
-  }
-  
-  return(results)
-}
-```
-
-
-Visualizing the Forecasts
-Visualizations help interpret complex forecast results:
-
-```{r}
-# Plot predicted champions
-ggplot(predicted_champions, aes(x = season, y = reorder(club, -forecasted_position))) +
-  geom_point(aes(size = forecasted_expenditure), color = "steelblue") +
-  theme_light() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(
-    title = "Predicted Premier League Champions (2022-2042)",
-    x = "Season",
-    y = "Club",
-    size = "Forecasted Expenditure (M EUR)"
-  )
-
-# Show expenditure forecasts for top clubs
-top_clubs <- head(clubs_with_history, 6)
-top_forecasts <- all_forecasts %>%
-  filter(club %in% top_clubs)
-
-ggplot(top_forecasts, aes(x = year, y = forecasted_expenditure, color = club)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = exp_lower_95, ymax = exp_upper_95, fill = club), alpha = 0.2, color = NA) +
-  theme_light() +
-  labs(
-    title = "Expenditure Forecasts for Top Premier League Clubs",
-    x = "Season",
-    y = "Forecasted Expenditure (M EUR)"
-  )
-```
-
-Implementation of LSTM Neural Networks
-For capturing complex non-linear relationships in time series data, we can implement Long Short-Term Memory (LSTM) networks, which have proven effective for time series forecasting
-
-```{r}
-# LSTM implementation for Premier League forecasting
-library(keras)
-library(tensorflow)
-
-# Prepare data for LSTM
-prepare_lstm_data <- function(ts_data, look_back = 5) {
-  x <- y <- list()
-  for (i in 1:(length(ts_data) - look_back)) {
-    x[[i]] <- ts_data[i:(i + look_back - 1)]
-    y[[i]] <- ts_data[i + look_back]
-  }
-  return(list(
-    x = array(unlist(x), dim = c(length(x), look_back, 1)),
-    y = unlist(y)
-  ))
-}
-
-# Create and train LSTM model for a single club
-train_lstm_model <- function(club_name, look_back = 5) {
-  club_data <- data %>% filter(club == club_name)
-  if (nrow(club_data) < 10) return(NULL)  # Need sufficient data
-  
-  # Scale the data
-  scale_factors <- c(mean(club_data$expenditure_m), sd(club_data$expenditure_m))
-  scaled_data <- (club_data$expenditure_m - scale_factors[1]) / scale_factors[2]
-  
-  # Prepare sequences
-  lstm_data <- prepare_lstm_data(scaled_data, look_back)
-  
-  # Define model
-  model <- keras_model_sequential() %>%
-    layer_lstm(units = 50, input_shape = c(look_back, 1), return_sequences = TRUE) %>%
-    layer_dropout(rate = 0.2) %>%
-    layer_lstm(units = 50, return_sequences = FALSE) %>%
-    layer_dropout(rate = 0.2) %>%
-    layer_dense(units = 1)
-  
-  # Compile model
-  model %>% compile(
-    loss = "mean_squared_error",
-    optimizer = "adam"
-  )
-  
-  # Train model
-  history <- model %>% fit(
-    lstm_data$x, lstm_data$y,
-    epochs = 100,
-    batch_size = 1,
-    verbose = 0
-  )
-  
-  return(list(
-    model = model,
-    scale_factors = scale_factors,
-    look_back = look_back
-  ))
-}
-```
-This LSTM implementation captures the sequential nature of Premier League performance data, potentially offering more accurate forecasts than traditional time series methods.
-
-
-
-Forecasting Results and Conclusions
-Based on our comprehensive time series analysis, we can generate a table of predicted Premier League champions for the next 20 seasons:
-
-```{r}
-# Display predicted champions table
-kable(predicted_champions, 
-      col.names = c("Season", "Year", "Predicted Champion", "Forecasted Expenditure (M EUR)", "Forecasted Position"),
-      caption = "Predicted Premier League Champions for Next 20 Seasons")
+ggplot(forecast_results, aes(x = year, y = forecast, color = club)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "20-Year Expenditure Forecast for Top Premier League Clubs",
+       subtitle = "ARIMA Model Projections",
+       x = "Season", y = "Forecasted Expenditure (M EUR)",
+       color = "Club") +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "bottom")
 ```
