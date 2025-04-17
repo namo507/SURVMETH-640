@@ -453,13 +453,12 @@ This trend makes it obvious to me that clubs have been pouring more and more mon
 First, let me create a time series model that can analyze the spending trends and title wins:
 
 ```{r}
-# Load necessary libraries for Premier League predictions
 library(tidyverse)
 library(forecast)
 library(tseries)
 library(ggplot2)
 
-# 1. Data preparation for time series forecasting
+# Data preparation for time series forecasting
 data <- data %>%
   mutate(
     season_year = as.numeric(substr(season, 1, 4)),
@@ -468,19 +467,18 @@ data <- data %>%
 ```
 
 ```{r}
-# 2. Create time series for each club's expenditure and position
+# Creating time series for each club's expenditure and position
 create_club_ts <- function(club_name) {
   # Extract data for this club
   club_data <- data %>%
     filter(club == club_name) %>%
     arrange(season_year)
   
-  # Check if we have enough data (at least 5 seasons)
   if(nrow(club_data) < 5) {
     return(NULL)
   }
   
-  # Create time series objects
+  # Creating time series objects
   exp_ts <- ts(club_data$expenditure_m, 
                start = min(club_data$season_year), 
                frequency = 1)
@@ -494,13 +492,13 @@ create_club_ts <- function(club_name) {
     expenditure_ts = exp_ts,
     position_ts = pos_ts,
     last_year = max(club_data$season_year),
-    data = club_data  # Include original data for plotting
+    data = club_data
   ))
 }
 ```
 
 ```{r}
-# Get clubs with sufficient data
+# Getting clubs with sufficient data
 clubs_with_history <- data %>%
   group_by(club) %>%
   summarize(seasons = n()) %>%
@@ -508,16 +506,17 @@ clubs_with_history <- data %>%
   arrange(desc(seasons)) %>%
   pull(club)
 
-# Create time series for each club
+# Creating time series for each club
 club_ts_list <- lapply(clubs_with_history, create_club_ts)
 names(club_ts_list) <- clubs_with_history
 ```
 
 ```{r}
-# 3. Visualize time series data for top clubs (e.g., top 6 by presence in dataset)
+# Visualizing time series data for top clubs 
+# (e.g., top 6 by presence in dataset)
 top_clubs <- head(clubs_with_history, 6)
 
-# Plot expenditure trends for top clubs
+# Plotting expenditure trends for top clubs
 expenditure_plot <- ggplot() +
   theme_light() +
   labs(title = "Expenditure Trends for Top Premier League Clubs",
@@ -534,12 +533,16 @@ for(club in top_clubs) {
                aes(x = season_year, y = expenditure_m, color = club))
 }
 
-# Displaying the plot
 print(expenditure_plot)
 ```
 
+This graph is now showing the expenditure trends for the top Premier League clubs and I noticed that spending for all these teams has increased significantly over time, especially from the mid-2000s onwards. There are some sharp spikes and drops for certain clubs—like the dramatic peaks for Chelsea and Manchester City, which really stand out and suggest periods of heavy investment, probably linked to **new ownership or big transfer windows.** 
+
+While all the clubs have generally spent more as the years have gone by, the fluctuations also show that some clubs have much more volatile spending patterns than others. Overall, it’s clear to me that the financial arms race among the top clubs has only intensified, with each team pushing their expenditure higher in the pursuit of success.
+
+
 ```{r}
-# 4. Analyze relationship between expenditure and position
+# Analyzing relationship between expenditure and position
 position_plot <- ggplot() +
   theme_light() +
   labs(title = "League Position vs. Expenditure for Top Premier League Clubs",
@@ -556,12 +559,20 @@ for(club in top_clubs) {
                aes(x = season_year, y = position, color = club))
 }
 
-# Display the plot with y-axis flipped (so 1st position is at top)
 print(position_plot + scale_y_reverse())
 ```
 
+Looking at this graph of league positions over time for the top Premier League clubs, I can see how each team’s performance has shifted from season to season. 
+
+The lines at the top of the chart—where the position number is lowest, show clubs that have consistently finished near the top of the table, while lines that dip lower indicate seasons where a club struggled. 
+
+Compared to the previous expenditure trend graph, this one gives me a clearer sense of how spending actually translates (or sometimes doesn’t translate) into league success. 
+For example, even though some clubs like Manchester United and Chelsea have stayed near the top for most seasons, others like Tottenham or Everton have had much more fluctuation in their league positions, despite periods of high spending. 
+
+It’s interesting to see that while increased expenditure often helps clubs stay competitive, it doesn’t guarantee consistent top finishes every year—performance still varies quite a bit, and some clubs have experienced more ups and downs regardless of their financial outlay.
+
 ```{r}
-# 5. Create a summary table of club expenditure statistics
+# Creating a summary table of club expenditure statistics
 club_spending_summary <- data.frame()
 
 for(club in clubs_with_history) {
@@ -589,6 +600,8 @@ top_clubs_by_position <- club_spending_summary %>%
 
 print(top_clubs_by_position)
 ```
+
+
 
 ```{r}
 # 6. Forecast expenditure for the next 5 seasons for a selected club (e.g., Manchester United)
