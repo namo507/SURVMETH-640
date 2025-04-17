@@ -716,7 +716,7 @@ library(e1071)
 forecast_horizon <- 20  # 20-year forecast
 
 train_forecast_models <- function(club_data) {
-  # Split data
+  # Splitting the data
   split <- initial_time_split(club_data, prop = 0.8)
   train <- training(split)
   test <- testing(split)
@@ -835,7 +835,7 @@ evaluate_models <- function(models, test_data) {
 }
 ```
 
-## Execute for Top Clubs
+## Executing for Top Clubs
 
 ```{r}
 data <- read.csv("Income_expenditure_table_posItIons_1992-2021.csv", stringsAsFactors = FALSE)
@@ -853,7 +853,7 @@ clubs_with_history <- data %>%
   arrange(desc(seasons)) %>%
   pull(club)
 
-# 3. Verify clubs_with_history exists
+# Verifying clubs_with_history exists
 print(clubs_with_history)
 ```
 
@@ -871,14 +871,14 @@ theme_set(theme_minimal())
 
 ```{r}
 load_process_data <- function() {
-  # Read and validate raw data
+  # Reading and validating raw data
   raw_data <- read.csv("Income_expenditure_table_posItIons_1992-2021.csv") %>%
     mutate(
       season_year = as.numeric(substr(as.character(season), 1, 4)),
       expenditure_m = as.numeric(expenditure_m),
       position = as.numeric(position)
     ) %>%
-    filter(!is.na(expenditure_m))  # Remove missing financial data
+    filter(!is.na(expenditure_m))  # Removing missing financial data
   
   # Critical column check
   stopifnot(c("club", "expenditure_m", "season_year") %in% colnames(raw_data))
@@ -892,7 +892,7 @@ load_process_data <- function() {
 create_club_timeseries <- function(data) {
   data %>%
     group_by(club) %>%
-    filter(n() >= 5) %>%  # Require minimum 5 seasons
+    filter(n() >= 5) %>%
     group_split() %>%
     map(~{
       ts_data <- list(
@@ -961,3 +961,5 @@ ggplot(forecast_results, aes(x = year, y = forecast, color = club)) +
   scale_color_brewer(palette = "Set1") +
   theme(legend.position = "bottom")
 ```
+
+
