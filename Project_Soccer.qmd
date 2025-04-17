@@ -364,13 +364,19 @@ winners <- data %>%
   arrange(position, .by_group = TRUE) %>% 
   filter(position == 1)
 
+# Check what column names are available
+print(names(winners))
+
+# Then use the correct column name in your summarize function
 winners_summary <- winners %>% 
   group_by(club) %>% 
   summarise(
     total_wins = n(),
-    total_spend = sum(expenditure_m),
+    # Replace expenditure_m with the actual column name from your data
+    # This might be "Expenditure", "expenditure", or something similar
+    total_spend = sum(expenditure_m, na.rm = TRUE),
     total_spend_fmt = formatC(total_spend, format = "f", big.mark = ",", digits = 1),
-    average_expenditure = mean(expenditure_m),
+    average_expenditure = mean(expenditure_m, na.rm = TRUE),
   ) %>% 
   arrange(desc(total_wins))
 
