@@ -44,7 +44,9 @@ scrape_transfer_data <- function(season) {
     cat("Transfer table not found for season:", season, "\n")
     return(list())
   }
-  
+``` 
+
+```{r}
   # Parsing the table into a data frame (fill = TRUE handles missing cells)
   transfer_table <- html_table(table_node, fill = TRUE)
   
@@ -57,7 +59,8 @@ scrape_transfer_data <- function(season) {
     return(list())
   }
 ```
-```{r}  
+
+```{r}
   # Renaming and selecting the columns of interest
   transfer_data <- transfer_table %>%
     rename(
@@ -132,7 +135,6 @@ epl_table_all <- list()
 So firstly, I created two specialized functions to collect historical Premier League data from Transfermarkt. The first function, scrape_transfer_data(), extracts transfer information for each season by constructing the appropriate URL with the season parameter. I made sure to include error handling to gracefully manage any connection issues like the function attempts to read the webpage's HTML and looks specifically for tables with the "items" class that contain the transfer data. When it finds the right table, it parses the content and formats it properly, extracting club names, income, expenses, and balance figures.
 
 My second function, scrape_epl_table(), works similarly but targets the final league standings. It grabs position information, team names, match statistics (played, wins, draws, losses), and point totals. For both functions, I format the season nicely (like "1992/93") and transform each row of data into a list format that will work well for JSON export. I also included thorough validation checks to ensure the tables contain the expected number of columns before processing them. This approach lets me build a comprehensive dataset spanning nearly three decades of Premier League history in a structured format that's ready for analysis.
-
 
 ```{r}
 # Looping through each season from 1992/93 (season = 1992) to 2021/22 (season = 2021)
@@ -273,7 +275,6 @@ normalise_club_name <- function(v) {
 }
 ```
 
-
 ```{r}
 # Reshaping the json array into a frame
 transfer_data <- transfer_data_raw %>% 
@@ -387,17 +388,15 @@ ggplot(winners_summary, aes(x = reorder(club, total_wins), y = total_wins)) +
 
 From the graph, it can be seen that Manchester United has won 13 Premier League titles in 30 seasons, cementing their historic dominance. One now may look at how much each club spent on average and in total for their title victories.
 
-
 ```{r echo=FALSE}
 kable(winners_summary %>% select(club, total_spend, average_expenditure), caption = "Expenditure for each title win", col.names = c("Club names", "Total Expenditure (M) EUR", "Average per title (M) EUR"))
 ```
 
-Ok so when I looked at the table of title-winning clubs and their expenditures, I was struck by just how much spending varied between champions. Manchester United managed to win many titles with a total spend of about 421 million euros, averaging just over 32 million per title. 
+Ok so when I looked at the table of title-winning clubs and their expenditures, I was struck by just how much spending varied between champions. Manchester United managed to win many titles with a total spend of about 421 million euros, averaging just over 32 million per title.
 
-In contrast, Manchester City’s recent dominance came at a much higher price, with their total spend exceeding 900 million euros and an average of over 150 million per title. Chelsea also spent heavily, averaging about 112 million euros per title win. 
+In contrast, Manchester City’s recent dominance came at a much higher price, with their total spend exceeding 900 million euros and an average of over 150 million per title. Chelsea also spent heavily, averaging about 112 million euros per title win.
 
 Meanwhile, clubs like Blackburn Rovers and Leicester City were real outliers, winning their only titles with far lower expenditures—just under 10 million and about 50 million euros, respectively. It’s clear that while some clubs have spent big to secure success, others have managed to win the league on a much tighter budget.
-
 
 ### Expenditure vs. League Position
 
@@ -443,10 +442,9 @@ ggplot(spend_over_time, aes(x = season, y = total_expenditure)) +
   labs(x = "Season", y = "Expenditure (M) EUR")
 ```
 
-Alright, so when I look at this graph of Premier League spending over time, I can clearly see just how dramatically expenditures have risen. In the early years, spending was relatively modest and increased gradually, but starting around the late 2000s and especially after 2010, there’s a really sharp climb. The total expenditure shoots up, peaking just before 2020, and even though there are a few dips and fluctuations after that, spending remains much higher than in the earlier decades. 
+Alright, so when I look at this graph of Premier League spending over time, I can clearly see just how dramatically expenditures have risen. In the early years, spending was relatively modest and increased gradually, but starting around the late 2000s and especially after 2010, there’s a really sharp climb. The total expenditure shoots up, peaking just before 2020, and even though there are a few dips and fluctuations after that, spending remains much higher than in the earlier decades.
 
 This trend makes it obvious to me that clubs have been pouring more and more money into transfers and wages as the league has grown in popularity and financial power.
-
 
 ## Modelling
 
@@ -536,10 +534,9 @@ for(club in top_clubs) {
 print(expenditure_plot)
 ```
 
-This graph is now showing the expenditure trends for the top Premier League clubs and I noticed that spending for all these teams has increased significantly over time, especially from the mid-2000s onwards. There are some sharp spikes and drops for certain clubs—like the dramatic peaks for Chelsea and Manchester City, which really stand out and suggest periods of heavy investment, probably linked to **new ownership or big transfer windows.** 
+This graph is now showing the expenditure trends for the top Premier League clubs and I noticed that spending for all these teams has increased significantly over time, especially from the mid-2000s onwards. There are some sharp spikes and drops for certain clubs—like the dramatic peaks for Chelsea and Manchester City, which really stand out and suggest periods of heavy investment, probably linked to **new ownership or big transfer windows.**
 
 While all the clubs have generally spent more as the years have gone by, the fluctuations also show that some clubs have much more volatile spending patterns than others. Overall, it’s clear to me that the financial arms race among the top clubs has only intensified, with each team pushing their expenditure higher in the pursuit of success.
-
 
 ```{r}
 # Analyzing relationship between expenditure and position
@@ -562,12 +559,11 @@ for(club in top_clubs) {
 print(position_plot + scale_y_reverse())
 ```
 
-Looking at this graph of league positions over time for the top Premier League clubs, I can see how each team’s performance has shifted from season to season. 
+Looking at this graph of league positions over time for the top Premier League clubs, I can see how each team’s performance has shifted from season to season.
 
-The lines at the top of the chart—where the position number is lowest, show clubs that have consistently finished near the top of the table, while lines that dip lower indicate seasons where a club struggled. 
+The lines at the top of the chart—where the position number is lowest, show clubs that have consistently finished near the top of the table, while lines that dip lower indicate seasons where a club struggled.
 
-Compared to the previous expenditure trend graph, this one gives me a clearer sense of how spending actually translates (or sometimes doesn’t translate) into league success. 
-For example, even though some clubs like Manchester United and Chelsea have stayed near the top for most seasons, others like Tottenham or Everton have had much more fluctuation in their league positions, despite periods of high spending. 
+Compared to the previous expenditure trend graph, this one gives me a clearer sense of how spending actually translates (or sometimes doesn’t translate) into league success. For example, even though some clubs like Manchester United and Chelsea have stayed near the top for most seasons, others like Tottenham or Everton have had much more fluctuation in their league positions, despite periods of high spending.
 
 It’s interesting to see that while increased expenditure often helps clubs stay competitive, it doesn’t guarantee consistent top finishes every year—performance still varies quite a bit, and some clubs have experienced more ups and downs regardless of their financial outlay.
 
@@ -601,14 +597,13 @@ top_clubs_by_position <- club_spending_summary %>%
 print(top_clubs_by_position)
 ```
 
-When I pulled together this summary of club spending and average league positions, it was clear to me that Manchester United has been the most consistently successful team, with the best average position (just above second place) across 30 seasons and a total spend of about 2.1 billion euros. 
+When I pulled together this summary of club spending and average league positions, it was clear to me that Manchester United has been the most consistently successful team, with the best average position (just above second place) across 30 seasons and a total spend of about 2.1 billion euros.
 
-Arsenal, Liverpool, and Chelsea also stood out for their strong average finishes, all spending well over a billion euros each. What really caught my eye was how Manchester City, despite only being in the data for 25 seasons, has spent nearly as much as Chelsea and actually has the highest average annual spend—over 94 million euros per season, but their average league position is lower, around seventh place. 
+Arsenal, Liverpool, and Chelsea also stood out for their strong average finishes, all spending well over a billion euros each. What really caught my eye was how Manchester City, despite only being in the data for 25 seasons, has spent nearly as much as Chelsea and actually has the highest average annual spend—over 94 million euros per season, but their average league position is lower, around seventh place.
 
-Tottenham, Leeds, and others have spent less and generally finished lower, while clubs like Blackburn and Newcastle have had some high points but also a lot of ups and downs. 
+Tottenham, Leeds, and others have spent less and generally finished lower, while clubs like Blackburn and Newcastle have had some high points but also a lot of ups and downs.
 
 So this table really highlights for me how sustained investment often goes hand-in-hand with better league finishes, but spending alone doesn’t always guarantee a top spot every year.
-
 
 ```{r}
 # Forecasting expenditure for the next 5 seasons for a selected club (e.g., Manchester United)
@@ -645,10 +640,9 @@ if(selected_club %in% names(club_ts_list)) {
 }
 ```
 
-Ok so when I ran the ARIMA forecast for Manchester United’s expenditure over the next five seasons, the results suggested that their annual spending is likely to stay above 100 million euros, with the forecast peaking at around 128 million in the 2023/24 season. The model does show quite a bit of uncertainty, though—the confidence intervals are really wide, especially in the later years, with the lower bounds even dipping below zero and the upper bounds reaching as high as 250 million euros. 
+Ok so when I ran the ARIMA forecast for Manchester United’s expenditure over the next five seasons, the results suggested that their annual spending is likely to stay above 100 million euros, with the forecast peaking at around 128 million in the 2023/24 season. The model does show quite a bit of uncertainty, though—the confidence intervals are really wide, especially in the later years, with the lower bounds even dipping below zero and the upper bounds reaching as high as 250 million euros.
 
 Looking at the graph, I can see that while the general trend points towards continued high spending, there’s a lot of volatility in the club’s past expenditure, and that’s reflected in the broad range of possible outcomes for the future. This tells me that while Manchester United is expected to keep investing heavily, predicting the exact amount is tricky given how much their spending has fluctuated in recent years.
-
 
 ```{r}
 # Investigating correlation between expenditure and position
@@ -677,11 +671,11 @@ ggplot(correlation_data, aes(x = avg_expenditure, y = avg_position)) +
   theme(legend.position = "right")
 ```
 
-When I look at this plot showing the relationship between average annual expenditure and average league position for Premier League clubs, it’s clear to me that there’s a strong connection between spending and success. 
+When I look at this plot showing the relationship between average annual expenditure and average league position for Premier League clubs, it’s clear to me that there’s a strong connection between spending and success.
 
-The clubs that have spent more money on average tend to finish higher up the table, as shown by the downward trend of the points and the fitted line. The biggest spenders are clustered toward the left and top of the chart, which means they’re not only spending more but also consistently achieving better league positions. 
+The clubs that have spent more money on average tend to finish higher up the table, as shown by the downward trend of the points and the fitted line. The biggest spenders are clustered toward the left and top of the chart, which means they’re not only spending more but also consistently achieving better league positions.
 
-On the other hand, clubs with lower average spending are mostly found further down the chart, with higher (worse) average positions. I also notice that some clubs with similar spending have quite different results, which suggests that while money matters a lot, it’s not the only factor in league performance. 
+On the other hand, clubs with lower average spending are mostly found further down the chart, with higher (worse) average positions. I also notice that some clubs with similar spending have quite different results, which suggests that while money matters a lot, it’s not the only factor in league performance.
 
 The size of the points shows how long each club has been in the Premier League, and it stands out to me that the most established clubs are also the ones spending the most and finishing the highest on average.
 
@@ -962,10 +956,10 @@ ggplot(forecast_results, aes(x = year, y = forecast, color = club)) +
   theme(legend.position = "bottom")
 ```
 
-When I look at the 20-year expenditure forecast for the top Premier League clubs, it’s immediately clear to me that the financial landscape is set to keep changing dramatically. 
+When I look at the 20-year expenditure forecast for the top Premier League clubs, it’s immediately clear to me that the financial landscape is set to keep changing dramatically.
 
-Arsenal’s projected spending stands out the most, with a steep and steady rise that leaves it far above the other clubs by the end of the forecast period. 
+Arsenal’s projected spending stands out the most, with a steep and steady rise that leaves it far above the other clubs by the end of the forecast period.
 
-The other teams, like Chelsea, Manchester United, Liverpool, Tottenham, and Everton, show much flatter trends, with their expenditures either stabilizing or fluctuating within a narrower range. Chelsea and Manchester United are forecasted to maintain high spending, but **not at the same explosive rate as Arsenal**. 
+The other teams, like Chelsea, Manchester United, Liverpool, Tottenham, and Everton, show much flatter trends, with their expenditures either stabilizing or fluctuating within a narrower range. Chelsea and Manchester United are forecasted to maintain high spending, but **not at the same explosive rate as Arsenal**.
 
 What really strikes me is how the gap between Arsenal and the rest widens over time, suggesting that if these trends hold, Arsenal could become the dominant financial force in the league. This projection highlights for me just how much club strategies and market dynamics might shape the next two decades of English football.
