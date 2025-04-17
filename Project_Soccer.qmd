@@ -76,25 +76,6 @@ scrape_transfer_data <- function(season) {
 ```
 
 ```{r}
-  # Renaming and selecting the columns of interest
-  transfer_data <- transfer_table %>%
-    rename(
-      Club = 2,
-      Income = 3,
-      Expense = 4,
-      Balance = 5
-    ) %>%
-    mutate(Season = formatted_season)
-  
-  # Converting each row to a list
-  records <- split(transfer_data, seq(nrow(transfer_data)))
-  records <- lapply(records, as.list)
-  
-  return(records)
-}
-```
-
-```{r}
 # Function to scrape the EPL league table data for a given season
 scrape_epl_table <- function(season) {
   # Constructing the URL for the league table
