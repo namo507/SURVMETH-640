@@ -45,20 +45,20 @@ scrape_transfer_data <- function(season) {
     return(list())
   }
   
-  # Parse the table into a data frame (fill = TRUE handles missing cells)
+  # Parsing the table into a data frame (fill = TRUE handles missing cells)
   transfer_table <- html_table(table_node, fill = TRUE)
   
-  # Format season as "1992/93", "1993/94", etc.
+  # Formatting season as "1992/93", "1993/94", etc.
   formatted_season <- sprintf("%d/%s", season, substr(as.character(season + 1), 3, 4))
-  
-  # For demonstration, assume that the table has at least 5 columns where:
+
   # Column 2: Club, Column 3: Income, Column 4: Expense, Column 5: Balance.
   if (ncol(transfer_table) < 5) {
     cat("Not enough columns in transfer table for season:", season, "\n")
     return(list())
   }
-  
-  # Rename and select the columns of interest; adjust indices if necessary
+```
+```{r}  
+  # Renaming and selecting the columns of interest
   transfer_data <- transfer_table %>%
     rename(
       Club = 2,
@@ -68,16 +68,18 @@ scrape_transfer_data <- function(season) {
     ) %>%
     mutate(Season = formatted_season)
   
-  # Convert each row to a list so that we can export a list of records
+  # Converting each row to a list
   records <- split(transfer_data, seq(nrow(transfer_data)))
   records <- lapply(records, as.list)
   
   return(records)
 }
+```
 
+```{r}
 # Function to scrape the EPL league table data for a given season
 scrape_epl_table <- function(season) {
-  # Construct the URL for the league table
+  # Constructing the URL for the league table
   url <- sprintf("https://www.transfermarkt.co.uk/premier-league/tabelle/wettbewerb/GB1/saison_id/%d", season)
   cat("Scraping league table data for season:", season, "\n")
   
@@ -99,9 +101,6 @@ scrape_epl_table <- function(season) {
   league_table <- html_table(table_node, fill = TRUE)
   formatted_season <- sprintf("%d/%s", season, substr(as.character(season + 1), 3, 4))
   
-  # Assume the league table has at least 9 columns where:
-  # Column 1: Position, Column 2: Team, Column 3: Played, Column 4: Wins,
-  # Column 5: Draws, Column 6: Losses and Column 9: Points.
   if (ncol(league_table) < 9) {
     cat("Not enough columns in league table for season:", season, "\n")
     return(list())
@@ -136,7 +135,7 @@ My second function, scrape_epl_table(), works similarly but targets the final le
 
 
 ```{r}
-# Loop through each season from 1992/93 (season = 1992) to 2021/22 (season = 2021)
+# Looping through each season from 1992/93 (season = 1992) to 2021/22 (season = 2021)
 for (season in 1992:2021) {
   cat("Processing season:", season, "\n")
   
