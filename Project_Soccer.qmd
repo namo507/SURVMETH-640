@@ -962,4 +962,10 @@ ggplot(forecast_results, aes(x = year, y = forecast, color = club)) +
   theme(legend.position = "bottom")
 ```
 
+When I look at the 20-year expenditure forecast for the top Premier League clubs, it’s immediately clear to me that the financial landscape is set to keep changing dramatically. 
 
+Arsenal’s projected spending stands out the most, with a steep and steady rise that leaves it far above the other clubs by the end of the forecast period. 
+
+The other teams, like Chelsea, Manchester United, Liverpool, Tottenham, and Everton, show much flatter trends, with their expenditures either stabilizing or fluctuating within a narrower range. Chelsea and Manchester United are forecasted to maintain high spending, but **not at the same explosive rate as Arsenal**. 
+
+What really strikes me is how the gap between Arsenal and the rest widens over time, suggesting that if these trends hold, Arsenal could become the dominant financial force in the league. This projection highlights for me just how much club strategies and market dynamics might shape the next two decades of English football.
