@@ -44,9 +44,7 @@ scrape_transfer_data <- function(season) {
     cat("Transfer table not found for season:", season, "\n")
     return(list())
   }
-``` 
 
-```{r}
   # Parsing the table into a data frame (fill = TRUE handles missing cells)
   transfer_table <- html_table(table_node, fill = TRUE)
   
@@ -58,6 +56,23 @@ scrape_transfer_data <- function(season) {
     cat("Not enough columns in transfer table for season:", season, "\n")
     return(list())
   }
+  
+  # Renaming and selecting the columns of interest
+  transfer_data <- transfer_table %>%
+    rename(
+      Club = 2,
+      Income = 3,
+      Expense = 4,
+      Balance = 5
+    ) %>%
+    mutate(Season = formatted_season)
+  
+  # Converting each row to a list
+  records <- split(transfer_data, seq(nrow(transfer_data)))
+  records <- lapply(records, as.list)
+  
+  return(records)
+}
 ```
 
 ```{r}
