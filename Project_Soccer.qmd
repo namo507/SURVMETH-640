@@ -354,7 +354,7 @@ library(ranger)
 data <- read.csv(file = "Income_expenditure_table_posItIons_1992-2021.csv")
 ```
 
-## Permier League Winners
+## Premier League Winners
 
 First, let me look at all of the title-winning teams and how many times they've won it.
 
