@@ -385,12 +385,19 @@ ggplot(winners_summary, aes(x = reorder(club, total_wins), y = total_wins)) +
   labs(x = "Club", y = "Times won")
 ```
 
-Manchester United has won 13 Premier League titles in 30 seasons, cementing their historic dominance. One now may look at how much each club spent on average and in total for their title victories.
+From the graph, it can be seen that Manchester United has won 13 Premier League titles in 30 seasons, cementing their historic dominance. One now may look at how much each club spent on average and in total for their title victories.
 
 
 ```{r echo=FALSE}
 kable(winners_summary %>% select(club, total_spend, average_expenditure), caption = "Expenditure for each title win", col.names = c("Club names", "Total Expenditure (M) EUR", "Average per title (M) EUR"))
 ```
+
+Ok so when I looked at the table of title-winning clubs and their expenditures, I was struck by just how much spending varied between champions. Manchester United managed to win many titles with a total spend of about 421 million euros, averaging just over 32 million per title. 
+
+In contrast, Manchester City’s recent dominance came at a much higher price, with their total spend exceeding 900 million euros and an average of over 150 million per title. Chelsea also spent heavily, averaging about 112 million euros per title win. 
+
+Meanwhile, clubs like Blackburn Rovers and Leicester City were real outliers, winning their only titles with far lower expenditures—just under 10 million and about 50 million euros, respectively. It’s clear that while some clubs have spent big to secure success, others have managed to win the league on a much tighter budget.
+
 
 ### Expenditure vs. League Position
 
@@ -436,6 +443,9 @@ ggplot(spend_over_time, aes(x = season, y = total_expenditure)) +
   labs(x = "Season", y = "Expenditure (M) EUR")
 ```
 
+Alright, so when I look at this graph of Premier League spending over time, I can clearly see just how dramatically expenditures have risen. In the early years, spending was relatively modest and increased gradually, but starting around the late 2000s and especially after 2010, there’s a really sharp climb. The total expenditure shoots up, peaking just before 2020, and even though there are a few dips and fluctuations after that, spending remains much higher than in the earlier decades. 
+
+This trend makes it obvious to me that clubs have been pouring more and more money into transfers and wages as the league has grown in popularity and financial power.
 
 
 ## Modelling
