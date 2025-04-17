@@ -352,6 +352,7 @@ library(caret)
 library(ranger)
 
 data <- read.csv(file = "Income_expenditure_table_posItIons_1992-2021.csv")
+print(names(winners))
 ```
 
 ## Premier League Winners
@@ -364,25 +365,18 @@ winners <- data %>%
   arrange(position, .by_group = TRUE) %>% 
   filter(position == 1)
 
-# Check what column names are available
-print(names(winners))
-
-# Then use the correct column name in your summarize function
+# All the title winners and a count of how many times they have won it
 winners_summary <- winners %>% 
   group_by(club) %>% 
-  summarise(
-    total_wins = n(),
-    # Replace expenditure_m with the actual column name from your data
-    # This might be "Expenditure", "expenditure", or something similar
-    total_spend = sum(expenditure_m, na.rm = TRUE),
-    total_spend_fmt = formatC(total_spend, format = "f", big.mark = ",", digits = 1),
-    average_expenditure = mean(expenditure_m, na.rm = TRUE),
-  ) %>% 
-  arrange(desc(total_wins))
+  tally(sort = T) %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  mutate(count = n) %>% 
+  select(club, count)
 
-ggplot(winners_summary, aes(x = reorder(club, total_wins), y = total_wins)) +
+ggplot(winners_summary, aes(x = reorder(club, count), y = count)) +
   geom_bar(stat = "identity", fill = "steelblue") +
-  geom_text(aes(label = total_wins), colour = "white", hjust = 2) +
+  geom_text(aes(label = count), colour = "white", hjust = 2) +
   theme_light() +
   coord_flip() +
   labs(x = "Club", y = "Times won")
