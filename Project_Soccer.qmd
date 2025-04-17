@@ -611,7 +611,7 @@ So this table really highlights for me how sustained investment often goes hand-
 
 
 ```{r}
-# 6. Forecast expenditure for the next 5 seasons for a selected club (e.g., Manchester United)
+# Forecasting expenditure for the next 5 seasons for a selected club (e.g., Manchester United)
 selected_club <- "Manchester United"
 
 if(selected_club %in% names(club_ts_list)) {
@@ -645,8 +645,13 @@ if(selected_club %in% names(club_ts_list)) {
 }
 ```
 
+Ok so when I ran the ARIMA forecast for Manchester United’s expenditure over the next five seasons, the results suggested that their annual spending is likely to stay above 100 million euros, with the forecast peaking at around 128 million in the 2023/24 season. The model does show quite a bit of uncertainty, though—the confidence intervals are really wide, especially in the later years, with the lower bounds even dipping below zero and the upper bounds reaching as high as 250 million euros. 
+
+Looking at the graph, I can see that while the general trend points towards continued high spending, there’s a lot of volatility in the club’s past expenditure, and that’s reflected in the broad range of possible outcomes for the future. This tells me that while Manchester United is expected to keep investing heavily, predicting the exact amount is tricky given how much their spending has fluctuated in recent years.
+
+
 ```{r}
-# 7. Investigate correlation between expenditure and position
+# Investigating correlation between expenditure and position
 correlation_data <- data %>%
   group_by(club) %>%
   summarize(
@@ -656,7 +661,7 @@ correlation_data <- data %>%
   ) %>%
   filter(seasons >= 5)
 
-# Create correlation plot
+# Creating correlation plot
 ggplot(correlation_data, aes(x = avg_expenditure, y = avg_position)) +
   geom_point(aes(size = seasons, color = club)) +
   geom_smooth(method = "lm", se = TRUE, color = "darkgray") +
@@ -671,6 +676,14 @@ ggplot(correlation_data, aes(x = avg_expenditure, y = avg_position)) +
   ) +
   theme(legend.position = "right")
 ```
+
+When I look at this plot showing the relationship between average annual expenditure and average league position for Premier League clubs, it’s clear to me that there’s a strong connection between spending and success. 
+
+The clubs that have spent more money on average tend to finish higher up the table, as shown by the downward trend of the points and the fitted line. The biggest spenders are clustered toward the left and top of the chart, which means they’re not only spending more but also consistently achieving better league positions. 
+
+On the other hand, clubs with lower average spending are mostly found further down the chart, with higher (worse) average positions. I also notice that some clubs with similar spending have quite different results, which suggests that while money matters a lot, it’s not the only factor in league performance. 
+
+The size of the points shows how long each club has been in the Premier League, and it stands out to me that the most established clubs are also the ones spending the most and finishing the highest on average.
 
 ## Enhanced Feature Engineering for ML Models
 
