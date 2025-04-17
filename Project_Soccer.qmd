@@ -601,6 +601,13 @@ top_clubs_by_position <- club_spending_summary %>%
 print(top_clubs_by_position)
 ```
 
+When I pulled together this summary of club spending and average league positions, it was clear to me that Manchester United has been the most consistently successful team, with the best average position (just above second place) across 30 seasons and a total spend of about 2.1 billion euros. 
+
+Arsenal, Liverpool, and Chelsea also stood out for their strong average finishes, all spending well over a billion euros each. What really caught my eye was how Manchester City, despite only being in the data for 25 seasons, has spent nearly as much as Chelsea and actually has the highest average annual spend—over 94 million euros per season, but their average league position is lower, around seventh place. 
+
+Tottenham, Leeds, and others have spent less and generally finished lower, while clubs like Blackburn and Newcastle have had some high points but also a lot of ups and downs. 
+
+So this table really highlights for me how sustained investment often goes hand-in-hand with better league finishes, but spending alone doesn’t always guarantee a top spot every year.
 
 
 ```{r}
