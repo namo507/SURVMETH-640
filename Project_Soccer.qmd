@@ -917,9 +917,6 @@ arima_forecast <- function(ts_object, horizon = 20) {
     return(NULL)
   })
 }
-```
-
-```{r}
 pl_data <- load_process_data()
 
 # Creating time series objects
