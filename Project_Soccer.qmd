@@ -351,7 +351,7 @@ library(prophet)
 library(caret)
 library(ranger)
 
-data <- read.csv("Income_expenditure_table_positions_1992-2021_.csv", stringsAsFactors = FALSE)
+data <- read.csv("Income_expenditure_table_posItIons_1992-2021.csv", stringsAsFactors = FALSE)
 names(data)
 ```
 
@@ -365,14 +365,14 @@ winners <- data %>%
   arrange(position, .by_group = TRUE) %>% 
   filter(position == 1)
 
-# All the title winners and a count of how many times they have won it
 winners_summary <- winners %>% 
   group_by(club) %>% 
-  tally(sort = T) %>% 
-  ungroup() %>% 
-  arrange(desc(n)) %>% 
-  mutate(count = n) %>% 
-  select(club, count)
+  summarise(
+    count = n(),
+    total_spend = sum(expenditure_m, na.rm = TRUE),
+    average_expenditure = mean(expenditure_m, na.rm = TRUE)
+  ) %>%
+  arrange(desc(count))
 
 ggplot(winners_summary, aes(x = reorder(club, count), y = count)) +
   geom_bar(stat = "identity", fill = "steelblue") +
@@ -385,6 +385,7 @@ ggplot(winners_summary, aes(x = reorder(club, count), y = count)) +
 From the graph, it can be seen that Manchester United has won 13 Premier League titles in 30 seasons, cementing their historic dominance. One now may look at how much each club spent on average and in total for their title victories.
 
 ```{r echo=FALSE}
+
 kable(winners_summary %>% select(club, total_spend, average_expenditure), caption = "Expenditure for each title win", col.names = c("Club names", "Total Expenditure (M) EUR", "Average per title (M) EUR"))
 ```
 
