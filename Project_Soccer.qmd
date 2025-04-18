@@ -351,8 +351,8 @@ library(prophet)
 library(caret)
 library(ranger)
 
-data <- read.csv(file = "Income_expenditure_table_posItIons_1992-2021.csv")
-print(names(winners))
+data <- read.csv("Income_expenditure_table_positions_1992-2021_.csv", stringsAsFactors = FALSE)
+names(data)
 ```
 
 ## Premier League Winners
