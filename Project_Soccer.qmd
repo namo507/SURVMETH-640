@@ -862,7 +862,7 @@ theme_set(theme_minimal())
 ```{r}
 load_process_data <- function() {
   # Reading and validating raw data
-  raw_data <- read.csv("Income_expenditure_table_posItIons_1992-2021.csv") %>%
+  raw_data <- read.csv("/Users/namomac/Downloads/92-21-income_expenditure_table_positions.csv") %>%
     mutate(
       season_year = as.numeric(substr(as.character(season), 1, 4)),
       expenditure_m = as.numeric(expenditure_m),
