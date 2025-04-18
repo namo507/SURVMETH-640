@@ -385,7 +385,6 @@ ggplot(winners_summary, aes(x = reorder(club, count), y = count)) +
 From the graph, it can be seen that Manchester United has won 13 Premier League titles in 30 seasons, cementing their historic dominance. One now may look at how much each club spent on average and in total for their title victories.
 
 ```{r echo=FALSE}
-
 kable(winners_summary %>% select(club, total_spend, average_expenditure), caption = "Expenditure for each title win", col.names = c("Club names", "Total Expenditure (M) EUR", "Average per title (M) EUR"))
 ```
 
