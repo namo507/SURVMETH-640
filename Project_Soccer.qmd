@@ -135,25 +135,27 @@ So firstly, I created two specialized functions to collect historical Premier Le
 My second function, scrape_epl_table(), works similarly but targets the final league standings. It grabs position information, team names, match statistics (played, wins, draws, losses), and point totals. For both functions, I format the season nicely (like "1992/93") and transform each row of data into a list format that will work well for JSON export. I also included thorough validation checks to ensure the tables contain the expected number of columns before processing them. This approach lets me build a comprehensive dataset spanning nearly three decades of Premier League history in a structured format that's ready for analysis.
 
 ```{r}
-# Looping through each season from 1992/93 (season = 1992) to 2021/22 (season = 2021)
-for (season in 1992:2021) {
-  cat("Processing season:", season, "\n")
+# # Looping through each season from 1992/93 (season = 1992) to 2021/22 (season = 2021)
+# for (season in 1992:2021) {
+#   cat("Processing season:", season, "\n")
   
-  # Scrape transfer data for the season
-  transfers <- scrape_transfer_data(season)
-  if (length(transfers) > 0) {
-    transfer_data_all <- c(transfer_data_all, transfers)
-  }
-  Sys.sleep(2) 
+#   # Scrape transfer data for the season
+#   transfers <- scrape_transfer_data(season)
+#   if (length(transfers) > 0) {
+#     transfer_data_all <- c(transfer_data_all, transfers)
+#   }
+#   Sys.sleep(2) 
   
-  # Scrape league table data
-  league_table <- scrape_epl_table(season)
-  if (length(league_table) > 0) {
-    epl_table_all <- c(epl_table_all, league_table)
-  }
-  Sys.sleep(2)
-}
+#   # Scrape league table data
+#   league_table <- scrape_epl_table(season)
+#   if (length(league_table) > 0) {
+#     epl_table_all <- c(epl_table_all, league_table)
+#   }
+#   Sys.sleep(2)
+# }
 ```
+
+## Commented for now since the process extraction is redundant
 
 After creating the specialized scraping functions, I used this loop to process 30 seasons of Premier League data. For each season, I first called scrape_transfer_data() to extract the transfer information, then added the results to my growing collection if data was successfully retrieved.
 
