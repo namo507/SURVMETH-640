@@ -693,6 +693,133 @@ On the other hand, clubs with lower average spending are mostly found further do
 
 The size of the points shows how long each club has been in the Premier League, and it stands out to me that the most established clubs are also the ones spending the most and finishing the highest on average.
 
+
+## Performance Category Prediction
+
+```{r}
+library(zoo)
+# Creating performance categories for classification
+data_ml <- data %>%
+  mutate(
+    performance_category = case_when(
+      position <= 4 ~ "Champions League",
+      position <= 7 ~ "European Places",
+      position <= 17 ~ "Mid-table",
+      TRUE ~ "Relegated"
+    ),
+    # Convert to factor for classification
+    performance_category = factor(performance_category, 
+                                 levels = c("Champions League", "European Places", 
+                                           "Mid-table", "Relegated"))
+  ) %>%
+  # Feature engineering - create more predictors
+  group_by(club) %>%
+  mutate(
+    prev_season_position = lag(position),
+    position_3yr_avg = rollmean(position, k = 3, fill = NA, align = "right"),
+    expenditure_3yr_avg = rollmean(expenditure_m, k = 3, fill = NA, align = "right"),
+    spend_efficiency = expenditure_m / (position + 1), # Lower position is better
+    income_to_expense_ratio = income_m / (expenditure_m + 0.1)
+  ) %>%
+  ungroup() %>%
+  # Remove rows with NAs from lag/rolling functions
+  filter(!is.na(prev_season_position), 
+         !is.na(position_3yr_avg),
+         !is.na(expenditure_3yr_avg))
+```
+
+Now let me try splitting the data into training and test set based on the season rather than 80-20%.
+
+```{r}
+# Splitting data into training (pre-2017) and testing (2017 onwards)
+train_data <- data_ml %>% filter(season_year < 2017)
+test_data <- data_ml %>% filter(season_year >= 2017)
+
+```
+```{r}
+# Check split proportions
+cat("Training set: ", nrow(train_data), " rows (", 
+    round(nrow(train_data)/nrow(data_ml)*100, 1), "%)\n",
+    "Testing set: ", nrow(test_data), " rows (", 
+    round(nrow(test_data)/nrow(data_ml)*100, 1), "%)\n", sep="")
+```
+
+So it is approximately 80-20 split.
+
+```{r}
+# Training a Random Forest model
+library(randomForest)
+set.seed(123)
+
+model_rf <- randomForest(
+  performance_category ~ expenditure_m + income_m + balance_m + 
+                       prev_season_position + position_3yr_avg + 
+                       expenditure_3yr_avg + spend_efficiency + income_to_expense_ratio,
+  data = train_data,
+  ntree = 500,
+  importance = TRUE
+)
+```
+
+```{r}
+# Generating predictions on test data
+test_data$predicted_category <- predict(model_rf, test_data)
+
+# Create confusion matrix
+conf_matrix <- table(Actual = test_data$performance_category, 
+                    Predicted = test_data$predicted_category)
+
+# Calculating accuracy
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+
+cat("Model Accuracy:", round(accuracy * 100, 1), "%\n")
+print(conf_matrix)
+```
+
+Ok so based on the confusion matrix, I can see that the model performs quite well in predicting the "Champions League" and "Mid-table" categories, with most teams in these groups correctly classified. Specifically, 19 out of 20 "Champions League" teams and 38 out of 46 "Mid-table" teams were accurately predicted. 
+
+However, the model struggles a bit more with the "European Places" and "Relegated" categories, often confusing "European Places" with "Mid-table," and "Relegated" with "Mid-table" as well. 
+
+This suggests that while the model is generally reliable for the top and middle teams, it has difficulty distinguishing between teams on the cusp of European qualification and those at risk of relegation. 
+
+Overall, the accuracy is promising, but there’s room for improvement, especially in differentiating between the more nuanced categories.
+
+```{r}
+# Visualize confusion matrix with ggplot2
+library(tidyr)
+
+conf_matrix_df <- as.data.frame.table(conf_matrix)
+names(conf_matrix_df) <- c("Actual", "Predicted", "Freq")
+
+ggplot(conf_matrix_df, aes(x = Predicted, y = Actual, fill = Freq)) +
+  geom_tile() +
+  geom_text(aes(label = Freq), color = "white", size = 4) +
+  scale_fill_gradient(low = "steelblue", high = "darkblue") +
+  labs(title = "Confusion Matrix: Premier League Performance Category Prediction",
+       subtitle = paste("Overall Accuracy:", round(accuracy * 100, 1), "%"),
+       x = "Predicted Category",
+       y = "Actual Category") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Variable importance plot
+var_importance <- importance(model_rf)
+var_importance_df <- data.frame(
+  Variable = rownames(var_importance),
+  Importance = var_importance[,1]
+) %>%
+  arrange(desc(Importance))
+
+ggplot(var_importance_df, aes(x = reorder(Variable, Importance), y = Importance)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Feature Importance for Performance Category Prediction",
+       subtitle = "Random Forest Model",
+       x = "Variables",
+       y = "Importance Score") +
+  theme_minimal()
+```
+
 ## Enhanced Feature Engineering for ML Models
 
 ```{r}
