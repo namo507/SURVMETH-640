@@ -784,8 +784,11 @@ This suggests that while the model is generally reliable for the top and middle 
 
 Overall, the accuracy is promising, but there’s room for improvement, especially in differentiating between the more nuanced categories.
 
+
+Now onto some visualizations:
+
 ```{r}
-# Visualize confusion matrix with ggplot2
+# Visualizing confusion matrix with ggplot2
 library(tidyr)
 
 conf_matrix_df <- as.data.frame.table(conf_matrix)
@@ -801,7 +804,8 @@ ggplot(conf_matrix_df, aes(x = Predicted, y = Actual, fill = Freq)) +
        y = "Actual Category") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
+```
+```{r}
 # Variable importance plot
 var_importance <- importance(model_rf)
 var_importance_df <- data.frame(
@@ -819,6 +823,15 @@ ggplot(var_importance_df, aes(x = reorder(Variable, Importance), y = Importance)
        y = "Importance Score") +
   theme_minimal()
 ```
+
+Now, looking at this feature importance plot from my Random Forest model, it's clear that a team's 3-year average position is overwhelmingly the most significant predictor of their performance category, which makes perfect sense given the historical consistency in football. Spend efficiency comes in as the second most important factor, showing that it's not just how much money clubs throw around but how wisely they use it that matters. 
+
+Previous season position ranks third, confirming recent form is indeed relevant but not as important as longer-term trends. 
+
+What's particularly interesting is how the financial variables like expenditure, balance, and income metrics have relatively minimal importance compared to the positional data. This reinforces what I've suspected in my analysis, that while money matters in football, smart spending and historical performance are far better indicators of where a team will finish than raw financial power alone. 
+
+The negligible importance of three-year average expenditure further supports this conclusion.
+
 
 ## Enhanced Feature Engineering for ML Models
 
